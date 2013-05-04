@@ -1,0 +1,11 @@
+{
+  "name": "webrtc",
+  "version": "0.0.0",
+  "description": "",
+  "main": "websocket-server.js",
+  "dependencies": {
+    "websocket": "~1.0.8"
+  },
+  "author": "Dmitry Kichenko",
+  "license": "BSD"
+}
