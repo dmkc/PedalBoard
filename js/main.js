@@ -1,3 +1,6 @@
+// Magic word designating the primary node
+SENDER_PRIMARY = 'primary';
+SENDER_AUX = 'aux';
 performance.now = performance.now || performance.webkitNow; // hack added by SD!
 
 var media = {};
@@ -18,21 +21,23 @@ var socket = new WebSocket('ws://localhost:1337/');
 socket.onmessage = function processMessage(message) {
     var msg = JSON.parse(message.data);
 
-    if (msg.type === 'offer') {
-        // Callee establishes PeerConnection
-        if (!started) {
-            //started = true;
-            createConnection();
+    // Auxiliary node connection init/reinit
+    if (msg.type === 'offer' && msg.sender === SENDER_PRIMARY) {
+        // Close existing connections if primary node is calling
+        if (started) {
+            closeConnections();
         }
 
+        createConnection();
+
         cnxn.setRemoteDescription(new RTCSessionDescription(msg));
-        console.log("Sending answer to peer.");
+        console.log("Sending session answer.");
         cnxn.createAnswer(setLocalAndSendMessage);
 
-    // TODO: always respond to mother
     } else if (msg.type == 'answer' && started) {
         console.log("Received answer from peer");
         cnxn.setRemoteDescription(new RTCSessionDescription(msg));
+
     } else if (msg.type === 'candidate' && started) {
         console.log("Adding new ICE candidate");
         var candidate = new RTCIceCandidate({
@@ -40,9 +45,10 @@ socket.onmessage = function processMessage(message) {
             candidate:msg.candidate
         });
         cnxn.addIceCandidate(candidate);
+
     } else if (msg.type === 'bye' && started) {
-        //onRemoteHangup();
         console.log('BYE');
+        closeConnections();
     }
 }
 
@@ -109,6 +115,7 @@ function createConnection() {
 
 function setLocalAndSendMessage(sessionDescription) {
     cnxn.setLocalDescription(sessionDescription);
+    sessionDescription.sender = (initiator) ? SENDER_PRIMARY : SENDER_AUX;
     sendMessage(sessionDescription);
 }
 
@@ -125,12 +132,10 @@ function sendData() {
   trace('Sent Data: ' + data);
 }
 
-function closeDataChannels() {
+function closeConnections() {
   trace('Closing data Channels');
-  sendChannel.close();
-  trace('Closed data channel with label: ' + sendChannel.label);
-  receiveChannel.close();
-  trace('Closed data channel with label: ' + receiveChannel.label);
+  if (sendChannel) sendChannel.close();
+  if (receiveChannel) receiveChannel.close();
   cnxn.close();
   //pc2.close();
   cnxn = null;
@@ -143,6 +148,7 @@ function closeDataChannels() {
   dataChannelReceive.value = "";
   dataChannelSend.disabled = true;
   dataChannelSend.placeholder = "Press Start, enter some text, then press Send.";
+  started = false;
 }
 
 
