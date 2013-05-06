@@ -10,7 +10,9 @@ media.fake = media.audio = true;
 
 var cnxn,
     client_id = NEW_CLIENT_ID,
-    sendChannel, receiveChannel,
+    registered,
+    sendChannel, 
+    receiveChannel,
     socket;
 
 started = false;
@@ -22,6 +24,9 @@ sendButton.disabled = true;
 closeButton.disabled = true;
 
 // WEBSOCKETS //////////
+/* 
+ * WebSockets are used to pass control and WebRTC messages
+ */
 function initSocket() {
     if (socket) {
         socket.close();
@@ -30,9 +35,42 @@ function initSocket() {
 
     socket = new WebSocket('ws://'+window.location.hostname+':1337/');
 
-    socket.onmessage = function processMessage(message) {
-        var msg = JSON.parse(message.data);
+    socket.onmessage = processMessage;
 
+    socket.onclose = function() {
+        console.log('Socket closed');
+        registered = false;
+
+        // Retry in a sec
+        setTimeout(function(){
+            console.log("Attempting to reconnect WebSocket...");
+            initSocket();
+        }, 2000);
+    }
+
+    socket.onopen = function() {
+        registerWithServer();
+    }
+}
+
+/*
+ * Handle WebSocket messages.
+ */
+function processMessage(message) {
+    var msg = JSON.parse(message.data);
+
+    if (!registered) {
+        if (msg.type === 'register') {
+            client_id = msg.client_id;
+            registered = true;
+
+            console.log("Registered with server, ID:", client_id);
+
+        } else {
+            registerWithServer();
+        }
+        
+    } else {
         // Auxiliary node connection init/reinit
         if (msg.type === 'offer' && msg.sender === SENDER_PRIMARY) {
             // Reconnect if necessary
@@ -46,42 +84,28 @@ function initSocket() {
             console.log("Sending session answer to PRI");
             cnxn.createAnswer(setLocalAndSendMessage);
 
-            // Respond to new AUX nodes joining the server
+        // Respond to new AUX nodes joining the server
         } else if (msg.type == 'offer' && msg.sender === SENDER_AUX
                    && initiator) {
-                       createConnection();
+            createConnection();
 
-                   } else if (msg.type == 'answer' && started) {
-                       console.log("Received answer from peer");
-                       cnxn.setRemoteDescription(new RTCSessionDescription(msg));
+        } else if (msg.type == 'answer' && started) {
+            console.log("Received answer from peer");
+            cnxn.setRemoteDescription(new RTCSessionDescription(msg));
 
-                   } else if (msg.type === 'candidate' && started) {
-                       console.log("Adding new ICE candidate");
-                       var candidate = new RTCIceCandidate({
-                           sdpMLineIndex:msg.label, 
-                           candidate:msg.candidate
-                       });
-                       cnxn.addIceCandidate(candidate);
+        } else if (msg.type === 'candidate' && started) {
+            console.log("Adding new ICE candidate");
+            var candidate = new RTCIceCandidate({
+                sdpMLineIndex:msg.label, 
+                candidate:msg.candidate
+            });
+            cnxn.addIceCandidate(candidate);
 
-                   } else if (msg.type === 'bye' && started) {
-                       console.log('BYE');
-                       closeConnections();
+        } else if (msg.type === 'bye' && started) {
+            console.log('BYE');
+            closeConnections();
 
-                   } else if (msg.type === 'register') {
-                       client_id = msg.client_id;
-                       registered = true;
-
-                       console.log("Registered with server, ID:", client_id);
-                   }
-    }
-
-    socket.onclose = function() {
-        console.log('Socket closed');
-        registered = false;
-    }
-
-    socket.onopen = function() {
-        registerWithServer();
+        } 
     }
 }
 
@@ -154,6 +178,9 @@ function sendData() {
   trace('Sent Data: ' + data);
 }
 
+/*
+ * Close RTC connections.
+ */
 function closeConnections() {
   trace('Closing data Channels');
   if (sendChannel) sendChannel.close();

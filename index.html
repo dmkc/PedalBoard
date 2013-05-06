@@ -42,7 +42,9 @@ textarea {
   <h1><a href="../index.html" title="simpl.info home page">simpl.info</a> RTCDataChannel</h1>
 
   <div id="buttons">
-    <button id="startButton" onclick="initiator=true;createConnection()">Start</button>
+      <button id="makePrimary" onclick="initiator=true;this.disabled=true">
+          Make primary</button>
+    <button id="startButton" onclick="createConnection()">Start</button>
     <button id="sendButton" onclick="sendData()">Send</button>
     <button id="closeButton" onclick="closeDataChannels()">Stop</button>
   </div>

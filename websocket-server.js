@@ -1,6 +1,7 @@
 var WebSocketServer = require('websocket').server;
 var http = require('http');
 var clients = [],
+    // TODO: hash or randomize IDs
     connectionCount = 0, 
     NEW_CLIENT_ID = -1;
 
