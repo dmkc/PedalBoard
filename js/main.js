@@ -1,12 +1,18 @@
 // Magic word designating the primary node
 SENDER_PRIMARY = 'primary';
 SENDER_AUX = 'aux';
+NEW_CLIENT_ID = -1;
+
 performance.now = performance.now || performance.webkitNow; // hack added by SD!
 
 var media = {};
 media.fake = media.audio = true;
 
-var sendChannel, receiveChannel;
+var cnxn,
+    client_id = NEW_CLIENT_ID,
+    sendChannel, receiveChannel,
+    socket;
+
 started = false;
 initiator = false;
 // cnxn defined in createConnection
@@ -15,66 +21,89 @@ startButton.disabled = false;
 sendButton.disabled = true;
 closeButton.disabled = true;
 
-// SOCKET //////////
-var socket = new WebSocket('ws://localhost:1337/');
+// WEBSOCKETS //////////
+function initSocket() {
+    if (socket) {
+        socket.close();
+        socket = null;
+    }
 
-socket.onmessage = function processMessage(message) {
-    var msg = JSON.parse(message.data);
+    socket = new WebSocket('ws://'+window.location.hostname+':1337/');
 
-    // Auxiliary node connection init/reinit
-    if (msg.type === 'offer' && msg.sender === SENDER_PRIMARY) {
-        // Close existing connections if primary node is calling
-        if (started) {
-            closeConnections();
-        }
+    socket.onmessage = function processMessage(message) {
+        var msg = JSON.parse(message.data);
 
-        createConnection();
+        // Auxiliary node connection init/reinit
+        if (msg.type === 'offer' && msg.sender === SENDER_PRIMARY) {
+            // Reconnect if necessary
+            if(!cnxn || cnxn.iceConnectionState === 'disconnected') {
+                closeConnections();
+                createConnection();
+            }
 
-        cnxn.setRemoteDescription(new RTCSessionDescription(msg));
-        console.log("Sending session answer.");
-        cnxn.createAnswer(setLocalAndSendMessage);
+            // Handle offer/answer handshake
+            cnxn.setRemoteDescription(new RTCSessionDescription(msg));
+            console.log("Sending session answer to PRI");
+            cnxn.createAnswer(setLocalAndSendMessage);
 
-    } else if (msg.type == 'answer' && started) {
-        console.log("Received answer from peer");
-        cnxn.setRemoteDescription(new RTCSessionDescription(msg));
+            // Respond to new AUX nodes joining the server
+        } else if (msg.type == 'offer' && msg.sender === SENDER_AUX
+                   && initiator) {
+                       createConnection();
 
-    } else if (msg.type === 'candidate' && started) {
-        console.log("Adding new ICE candidate");
-        var candidate = new RTCIceCandidate({
-            sdpMLineIndex:msg.label, 
-            candidate:msg.candidate
-        });
-        cnxn.addIceCandidate(candidate);
+                   } else if (msg.type == 'answer' && started) {
+                       console.log("Received answer from peer");
+                       cnxn.setRemoteDescription(new RTCSessionDescription(msg));
 
-    } else if (msg.type === 'bye' && started) {
-        console.log('BYE');
-        closeConnections();
+                   } else if (msg.type === 'candidate' && started) {
+                       console.log("Adding new ICE candidate");
+                       var candidate = new RTCIceCandidate({
+                           sdpMLineIndex:msg.label, 
+                           candidate:msg.candidate
+                       });
+                       cnxn.addIceCandidate(candidate);
+
+                   } else if (msg.type === 'bye' && started) {
+                       console.log('BYE');
+                       closeConnections();
+
+                   } else if (msg.type === 'register') {
+                       client_id = msg.client_id;
+                       registered = true;
+
+                       console.log("Registered with server, ID:", client_id);
+                   }
+    }
+
+    socket.onclose = function() {
+        console.log('Socket closed');
+        registered = false;
+    }
+
+    socket.onopen = function() {
+        registerWithServer();
     }
 }
 
-// RTC
-function trace(text) {
-  // This function is used for logging.
-  if (text[text.length - 1] == '\n') {
-    text = text.substring(0, text.length - 1);
-  }
-  console.log((performance.now() / 1000).toFixed(3) + ": " + text);
+// RTC ///////////
+
+function registerWithServer() {
+    sendMessage({
+        type: "register",
+        client_id: client_id
+    });
 }
 
 function createConnection() {
     started=true;
     var servers = null;
+    
     window.cnxn = new webkitRTCPeerConnection(
         servers,
         {optional: [{RtpDataChannels: true}]}
     );
 
-    trace('Created local peer connection object cnxn');
-
     try {
-        // Reliable Data Channels not yet supported in Chrome
-        // Data Channel api supported from Chrome M25.
-        // You need to start chrome with  --enable-data-channels flag.
         if(initiator) {
             sendChannel = cnxn.createDataChannel("channel-"+(Math.random()*1000).toFixed(0),
                 {reliable: false});
@@ -91,26 +120,19 @@ function createConnection() {
     cnxn.ondatachannel = receiveChannelCallback;
 
     cnxn.onicechange = function(e){
-        console.log('ICE state change:', e);
+        console.log('ICE state change:', 
+                    cnxn.iceConnectionState, 
+                    e);
     };
 
     cnxn.onstatechange = function(e){
         console.log('Connection state change:', e);
     };
 
-  /*
-  //window.pc2 = new webkitRTCPeerConnection(servers, {optional: [{RtpDataChannels: true}]});
-  trace('Created remote peer connection object pc2');
-
-  pc2.onicecandidate = iceCallback2;
-  */
-
   
-  if(initiator){
-      cnxn.createOffer(setLocalAndSendMessage);
-  }
-  startButton.disabled = true;
-  closeButton.disabled = false;
+    cnxn.createOffer(setLocalAndSendMessage);
+    startButton.disabled = true;
+    closeButton.disabled = false;
 }
 
 function setLocalAndSendMessage(sessionDescription) {
@@ -136,11 +158,12 @@ function closeConnections() {
   trace('Closing data Channels');
   if (sendChannel) sendChannel.close();
   if (receiveChannel) receiveChannel.close();
-  cnxn.close();
+  if (cnxn) cnxn.close();
   //pc2.close();
   cnxn = null;
   //pc2 = null;
   trace('Closed peer connections');
+  // UI stuff
   startButton.disabled = false;
   sendButton.disabled = true;
   closeButton.disabled = true;
@@ -187,6 +210,9 @@ function onSendChannelStateChange() {
         dataChannelSend.placeholder = "";
         sendButton.disabled = false;
         closeButton.disabled = false;
+        sendChannel.onmessage = onReceiveMessageCallback;
+        sendChannel.onopen = onReceiveChannelStateChange;
+        sendChannel.onclose = onReceiveChannelStateChange;
     } else {
         dataChannelSend.disabled = true;
         sendButton.disabled = true;
@@ -198,3 +224,13 @@ function onReceiveChannelStateChange() {
   var readyState = receiveChannel.readyState;
   trace('Receive channel state is: ' + readyState);
 }
+
+function trace(text) {
+  // This function is used for logging.
+  if (text[text.length - 1] == '\n') {
+    text = text.substring(0, text.length - 1);
+  }
+  console.log((performance.now() / 1000).toFixed(3) + ": " + text);
+}
+
+initSocket();
