@@ -55,8 +55,7 @@ function echoMessage(message, to) {
  * Handle incoming requests.
  */
 wsServer.on('request', function(request) {
-    var connection = request.accept(null, request.origin),
-        sendTo = [];
+    var connection = request.accept(null, request.origin);
 
     console.log('New connection from', connection.remoteAddress);
     connection.client_id = NEW_CLIENT_ID;
@@ -65,6 +64,8 @@ wsServer.on('request', function(request) {
     console.log('Total clients:', clients.length);
     
     connection.on('message', function(message) {
+        var sendTo = [];
+
         if (message.type === 'utf8') {
             try {
                 var msg = JSON.parse(message.utf8Data);

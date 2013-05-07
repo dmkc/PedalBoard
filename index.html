@@ -42,21 +42,21 @@ textarea {
   <h1><a href="../index.html" title="simpl.info home page">simpl.info</a> RTCDataChannel</h1>
 
   <div id="buttons">
-      <button id="makePrimary" onclick="initiator=true;this.disabled=true">
-          Make primary</button>
-    <button id="startButton" onclick="createConnection()">Start</button>
-    <button id="sendButton" onclick="sendData()">Send</button>
+      <button id="makePrimary" onclick="window.peer = new Peer(true)">
+          Master</button>
+    <button id="startButton" onclick="window.peer = new Peer()">Slave</button>
+    <button id="sendButton" onclick="peer.sendToAll(document.getElementById('dataChannelSend').value)">Send</button>
     <button id="closeButton" onclick="closeDataChannels()">Stop</button>
   </div>
 
   <div id="sendReceive">
     <div id="send">
       <h2>Send</h2>
-      <textarea id="dataChannelSend" disabled placeholder="Press Start, enter some text, then press Send."></textarea>
+      <textarea id="dataChannelSend" placeholder="Press Start, enter some text, then press Send."></textarea>
     </div>
     <div id="receive">
       <h2>Receive</h2>
-      <textarea id="dataChannelReceive" disabled></textarea>
+      <textarea id="dataChannelReceive"></textarea>
     </div>
   </div>
 
