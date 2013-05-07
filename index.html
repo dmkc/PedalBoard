@@ -42,9 +42,9 @@ textarea {
   <h1><a href="../index.html" title="simpl.info home page">simpl.info</a> RTCDataChannel</h1>
 
   <div id="buttons">
-      <button id="makePrimary" onclick="window.peer = new Peer(true)">
+      <button id="makePrimary" onclick="window.peer = new Master()">
           Master</button>
-    <button id="startButton" onclick="window.peer = new Peer()">Slave</button>
+    <button id="startButton" onclick="window.peer = new Slave()">Slave</button>
     <button id="sendButton" onclick="peer.sendToAll(document.getElementById('dataChannelSend').value)">Send</button>
     <button id="closeButton" onclick="closeDataChannels()">Stop</button>
   </div>

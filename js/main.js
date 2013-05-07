@@ -1,4 +1,4 @@
-// Magic word designating the primary node
+// Magic number for an unregistered client
 NEW_CLIENT_ID = -1;
 
 performance.now = performance.now || performance.webkitNow; // hack added by SD!
@@ -9,10 +9,13 @@ media.fake = media.audio = true;
 var socket;
 
 
-
 /* 
  * WebSockets are used to pass control and WebRTC messages
  */
+function Socket() {
+
+}
+
 function initSocket() {
     if (socket) {
         socket.close();
@@ -21,14 +24,12 @@ function initSocket() {
 
     socket = new WebSocket('ws://'+window.location.hostname+':1337/');
 
-
-
     return socket;
 }
 
 function sendMessage(message) {
     var msgString = JSON.stringify(message);
-    console.log('MSG TO SERVER: ' + msgString);
+    console.log("TO WSS:", msgString);
     socket.send(msgString);
 }
 
@@ -36,22 +37,21 @@ function sendMessage(message) {
 
 // RTC ///////////
 
-function Peer(isMaster) {
-    var registered,
-        client_id = NEW_CLIENT_ID,
-        socket,
-        connections = [],
-        master = isMaster || false;
-
-    this.connections = connections;
+function Peer() {
+    var registered = this.registered = false,
+        client_id = this.client_id = NEW_CLIENT_ID,
+        socket = this.socket,
+        connections = this.connections = [],
+        master = this.master,
+        that = this;
 
     // TODO: move to constructor
     socket = initSocket();
-    socket.addEventListener('message', processMessage);
+    socket.addEventListener('message', proxy(this.processMessage, this));
 
     socket.addEventListener('close',  function() {
         console.log('Socket closed');
-        registered = false;
+        that.registered = false;
 
         setTimeout(function(){
             console.log("Attempting to reconnect WebSocket...");
@@ -60,61 +60,95 @@ function Peer(isMaster) {
     });
 
     socket.addEventListener('open', function() {
-        register();
+        that.register();
         if (master) {
-            announce();
+            that.announce();
         }
     });
 
-    function register() {
-        sendMessage({
-            type: "register",
-            client_id: client_id
-        });
-    }
 
-    function announce(){
-        sendMessage({
-            type: "announce",
-            client_id: client_id
-        });
-    }
+}
 
+Peer.prototype = Object.create({
     /*
      * Handle WebSocket messages.
      */
-    function processMessage(message) {
+    processMessage: function(message) {
+        throw 'Not implemented';
+    },
+
+    register: function() {
+        sendMessage({
+            type: "register",
+            client_id: this.client_id
+        });
+    },
+
+    announce: function(){
+        sendMessage({
+            type: "announce",
+            client_id: this.client_id
+        });
+    },
+
+    findConnection: function(client_id) {
+        for(var c in this.connections) {
+            if (this.connections[c].client_id === client_id)
+                return this.connections[c];
+        }
+        return null;
+    },
+
+    addConnection: function(connection) {
+        this.connections.push(connection);
+    },
+
+    sendToAll: function(msg) {
+        this.connections.forEach(function(cnxn) {
+            cnxn.sendData(msg);
+        });
+    },
+});
+
+
+function Master() {
+    this.master = true;
+    Peer.call(this);
+}
+
+Master.prototype = Object.create(extend(Peer.prototype, {
+    processMessage: function(message) {
         var msg = JSON.parse(message.data),
             peer,
             cnxn;
 
-        if (!registered) {
+        if (!this.registered) {
             if (msg.type === 'register') {
-                client_id = msg.client_id;
-                registered = true;
+                this.client_id = msg.client_id;
+                this.registered = true;
 
-                console.log("Registered with server, ID:", client_id);
+                console.log("Registered with server, ID:", this.client_id);
 
             } else {
-                register();
+                this.register();
             }
             
         } else {
-            peer = findConnection(msg.client_id);
+            peer = this.findConnection(msg.client_id);
 
-            if (msg.type === 'offer' && master) {
+            if (msg.type === 'offer' && this.master) {
                 if (peer == null) {
-                    var peer = new PeerConnection(msg.client_id).init(false);
-                    addConnection(peer);
+                    var peer = new RTCConnection(msg.client_id).init(false);
+                    this.addConnection(peer);
                     cnxn = peer.cnxn;
                 } 
                 peer.respondToOffer(msg);
 
-            } else if (msg.type == 'announce' && !master) {
-                var peer = new PeerConnection(msg.client_id).init(true);
-                addConnection(peer);
+            } else if (msg.type == 'announce' && !this.master) {
+                var peer = new RTCConnection(msg.client_id).init(true);
+                this.addConnection(peer);
                 
-            } else if (msg.type == 'offer' && !master) {
+            } else if (msg.type == 'offer' && !this.master) {
                 // TODO: check pool of connections for client_id
                 console.log("New client knocking:", msg.client_id);
                 //createConnection();
@@ -133,31 +167,67 @@ function Peer(isMaster) {
             } 
         }
     }
+}));
 
+function Slave() {
+    this.master = false;
+    Peer.call(this);
+}
 
+Slave.prototype = Object.create(extend(Peer.prototype, {
+    processMessage: function(message) {
+        var msg = JSON.parse(message.data),
+            peer,
+            cnxn;
 
-    function findConnection(client_id) {
-        for(var c in connections) {
-            if (connections[c].client_id === client_id)
-                return connections[c];
+        if (!this.registered) {
+            if (msg.type === 'register') {
+                this.client_id = msg.client_id;
+                this.registered = true;
+
+                console.log("Registered with server, ID:", this.client_id);
+
+            } else {
+                this.register();
+            }
+            
+        } else {
+            peer = this.findConnection(msg.client_id);
+
+            if (msg.type === 'offer' && this.master) {
+                if (peer == null) {
+                    var peer = new RTCConnection(msg.client_id).init(false);
+                    this.addConnection(peer);
+                    cnxn = peer.cnxn;
+                } 
+                peer.respondToOffer(msg);
+
+            } else if (msg.type == 'announce' && !this.master) {
+                var peer = new RTCConnection(msg.client_id).init(true);
+                this.addConnection(peer);
+                
+            } else if (msg.type == 'offer' && !this.master) {
+                // TODO: check pool of connections for client_id
+                console.log("New client knocking:", msg.client_id);
+                //createConnection();
+
+            } else if (msg.type == 'answer') {
+                console.log("Received answer from a peer");
+                peer.answer(msg);
+                peer.client_id = msg.client_id;
+
+            } else if (msg.type === 'candidate') {
+                peer.addCandidate(msg);
+
+            } else if (msg.type === 'bye' && peer.started) {
+                console.log('BYE');
+                peer.closeConnections();
+            } 
         }
-        return null;
     }
+}));
 
-    function addConnection(connection) {
-        connections.push(connection);
-    }
-
-}
-
-Peer.prototype.sendToAll = function(msg) {
-    this.connections.forEach(function(cnxn) {
-        cnxn.sendData(msg);
-    });
-}
-
-
-function PeerConnection(client_id) {
+function RTCConnection(client_id) {
     this.client_id = client_id || NEW_CLIENT_ID;
     this.cnxn
     this.sendChannel
@@ -166,162 +236,147 @@ function PeerConnection(client_id) {
     this.started = false;
 }
 
-PeerConnection.prototype.init = function(dataChannel) {
-    // TODO: handle reconnection  elsewhere
-    if(!this.cnxn || this.cnxn.iceConnectionState === 'disconnected') {
-        this.closeConnections();
-        this.createConnection(dataChannel);
-    }
-
-    return this;
-}
-
-PeerConnection.prototype.createConnection = function(dataChannel) {
-    var servers = null,
-        cnxn;
-    
-    this.started = true;
-    this.cnxn = new webkitRTCPeerConnection(
-        servers,
-        {optional: [{RtpDataChannels: true}]}
-    );
-    cnxn = this.cnxn;
-
-    try {
-        if(dataChannel) {
-            this.dataChannel = this.cnxn.createDataChannel(
-                "channel-"+(Math.random()*1000).toFixed(0),
-                {reliable: false}
-            );
-            this.dataChannel.onopen = proxy(this.onDataChannelStateChange, this);
-            this.dataChannel.onclose = proxy(this.onDataChannelStateChange, this);
-            trace('Created send data channel');
+RTCConnection.prototype = Object.create({
+    init: function(dataChannel) {
+        // TODO: handle reconnection  elsewhere
+        if(!this.cnxn || this.cnxn.iceConnectionState === 'disconnected') {
+            this.closeConnections();
+            this.createConnection(dataChannel);
         }
-    } catch (e) {
-        trace('Create Data channel failed with exception: ' + e.message);
-    }
-    cnxn.addEventListener('icecandidate', onIceCandidate);
-    cnxn.addEventListener('datachannel', 
-        proxy(this.newDataChannelCallback, this));
 
-    cnxn.onicechange = function(e){
-        // TODO: look for another master
-        console.log('ICE state change:', 
-                    cnxn.iceConnectionState, 
-                    e);
-    };
+        return this;
+    },
 
-    cnxn.onstatechange = function(e){
-        console.log('Connection state change:', 
-            cnxn.readyState,
-            e);
-    };
+    createConnection : function(dataChannel) {
+        var servers = null,
+            cnxn;
+        
+        this.started = true;
+        this.cnxn = new webkitRTCPeerConnection(
+            servers,
+            {optional: [{RtpDataChannels: true}]}
+        );
+        cnxn = this.cnxn;
 
-  
-    cnxn.createOffer(proxy(this.setLocalAndSendMessage, this));
+        try {
+            if(dataChannel) {
+                this.dataChannel = this.cnxn.createDataChannel(
+                    "channel-"+(Math.random()*1000).toFixed(0),
+                    {reliable: false}
+                );
+                this.dataChannel.onopen = proxy(this.onDataChannelStateChange, this);
+                this.dataChannel.onclose = proxy(this.onDataChannelStateChange, this);
+                console.log('Created send data channel');
+            }
+        } catch (e) {
+            console.log('Create Data channel failed with exception: ' + e.message);
+        }
+        cnxn.addEventListener('icecandidate', this.onIceCandidate);
+        cnxn.addEventListener('datachannel', 
+            proxy(this.newDataChannelCallback, this));
 
-    return cnxn;
-}
+        cnxn.onicechange = function(e){
+            // TODO: look for another master
+            console.log('ICE state change:', 
+                        cnxn.iceConnectionState, 
+                        e);
+        };
 
-PeerConnection.prototype.respondToOffer = function(msg) {
-    // Handle offer/answer handshake
-    this.cnxn.setRemoteDescription(new RTCSessionDescription(msg));
-    console.log("Sending session answer to PRI");
-    this.cnxn.createAnswer(proxy(this.setLocalAndSendMessage, this));
-}
+        cnxn.onstatechange = function(e){
+            console.log('Connection state change:', 
+                cnxn.readyState,
+                e);
+        };
 
-PeerConnection.prototype.answer = function(msg) {
-    this.cnxn.setRemoteDescription(new RTCSessionDescription(msg));
-}
+      
+        cnxn.createOffer(proxy(this.setLocalAndSendMessage, this));
 
-PeerConnection.prototype.addCandidate = function(msg) {
-    console.log("Adding new ICE candidate");
-    var candidate = new RTCIceCandidate({
-        sdpMLineIndex:msg.label, 
-        candidate:msg.candidate
-    });
+        return cnxn;
+    },
 
-    this.cnxn.addIceCandidate(candidate);
-}
+    respondToOffer : function(msg) {
+        // Handle offer/answer handshake
+        this.cnxn.setRemoteDescription(new RTCSessionDescription(msg));
+        console.log("Sending session answer to PRI");
+        this.cnxn.createAnswer(proxy(this.setLocalAndSendMessage, this));
+    },
 
-PeerConnection.prototype.setLocalAndSendMessage = function(sessionDescription) {
-    console.log('setlocalandsend', this);
-    this.cnxn.setLocalDescription(sessionDescription);
-    sendMessage(sessionDescription);
-}
+    answer : function(msg) {
+        this.cnxn.setRemoteDescription(new RTCSessionDescription(msg));
+    },
 
-
-PeerConnection.prototype.sendData = function() {
-  var data = document.getElementById("dataChannelSend").value;
-  this.dataChannel.send(data);
-  trace('Sent Data: ' + data);
-}
-
-PeerConnection.prototype.closeConnections = function() {
-  trace('Closing data Channels');
-  if (this.sendChannel) sendChannel.close();
-  if (this.receiveChannel) receiveChannel.close();
-  if (this.cnxn) this.cnxn.close();
-  //pc2.close();
-  this.cnxn = null;
-  //pc2 = null;
-  trace('Closed peer connections');
-  // UI stuff
-  dataChannelSend.value = "";
-  dataChannelReceive.value = "";
-  dataChannelSend.placeholder = "Press Start, enter some text, then press Send.";
-  this.started = false;
-}
-
-PeerConnection.prototype.onDataChannelStateChange = function() {
-    var readyState = this.dataChannel.readyState;
-    trace('Data channel state change: ' + readyState);
-    if (readyState == "open") {
-        this.dataChannel.onmessage = onReceiveMessageCallback;
-        //this.dataChannel.onopen = onDataChannelStateChange;
-        //this.dataChannel.onclose = onDataChannelStateChange;
-    } 
-}
-
-
-PeerConnection.prototype.newDataChannelCallback = function(event) {
-  trace('Receive Channel Callback');
-  this.dataChannel = event.channel;
-  this.dataChannel.onmessage = onReceiveMessageCallback;
-  this.dataChannel.onopen = proxy(this.onDataChannelStateChange, this);
-  this.dataChannel.onclose = proxy(this.onDataChannelStateChange, this);
-}
-
-
-// TODO: callback mess
-function onIceCandidate(event) {
-    if (event.candidate) {
-        sendMessage({
-            type: 'candidate',
-            label: event.candidate.sdpMLineIndex,
-            id: event.candidate.sdpMid,
-            candidate: event.candidate.candidate
+    addCandidate : function(msg) {
+        console.log("Adding new ICE candidate");
+        var candidate = new RTCIceCandidate({
+            sdpMLineIndex:msg.label, 
+            candidate:msg.candidate
         });
-    } else {
-        console.log("End of candidates.");
-    }
-}
+
+        this.cnxn.addIceCandidate(candidate);
+    },
+
+    setLocalAndSendMessage : function(sessionDescription) {
+        console.log('setlocalandsend', this);
+        this.cnxn.setLocalDescription(sessionDescription);
+        sendMessage(sessionDescription);
+    },
 
 
-function onReceiveMessageCallback(event) {
-  trace('Received Message:', event.data);
-  document.getElementById("dataChannelReceive").value = event.data;
-}
+    sendData: function(data) {
+      this.dataChannel.send(data);
+      console.log('Sent Data: ' + data);
+    },
+
+    closeConnections : function() {
+      console.log('Closing data Channels');
+      if (this.sendChannel) sendChannel.close();
+      if (this.receiveChannel) receiveChannel.close();
+      if (this.cnxn) this.cnxn.close();
+      this.cnxn = null;
+      console.log('Closed peer connections');
+
+      this.started = false;
+    },
+
+    //
+    // CALLBACKS
+    //
+    onDataChannelStateChange: function() {
+        var readyState = this.dataChannel.readyState;
+        console.log('Data channel state change: ' + readyState);
+        if (readyState == "open") {
+            this.dataChannel.onmessage = this.onReceiveMessageCallback;
+            //this.dataChannel.onopen = onDataChannelStateChange;
+            //this.dataChannel.onclose = onDataChannelStateChange;
+        } 
+    },
 
 
+    newDataChannelCallback: function(event) {
+      console.log('Receive Channel Callback');
+      this.dataChannel = event.channel;
+      this.dataChannel.onmessage = proxy(this.onReceiveMessageCallback, this);
+      this.dataChannel.onopen = proxy(this.onDataChannelStateChange, this);
+      this.dataChannel.onclose = proxy(this.onDataChannelStateChange, this);
+    },
 
-function trace(text) {
-  // This function is used for logging.
-  if (text[text.length - 1] == '\n') {
-    text = text.substring(0, text.length - 1);
-  }
-  console.log((performance.now() / 1000).toFixed(3) + ": " + text);
-}
+    onIceCandidate: function onIceCandidate(event) {
+        if (event.candidate) {
+            sendMessage({
+                type: 'candidate',
+                label: event.candidate.sdpMLineIndex,
+                id: event.candidate.sdpMid,
+                candidate: event.candidate.candidate
+            });
+        } else {
+            console.log("End of candidates.");
+        }
+    },
+
+    onReceiveMessageCallback: function onReceiveMessageCallback(event) {
+        console.log('Received Message:', event.data);
+    },
+});
 
 
 // Run function in given context
@@ -331,3 +386,17 @@ function proxy(func, context) {
     };
 }
 
+// Extend object with properties of another
+// Borrowed from Underscore.js: https://github.com/documentcloud/underscore
+function extend(obj) {
+    Array.prototype.forEach.call(
+        Array.prototype.slice.call(arguments, 1), 
+        function(source) {
+            if (source) {
+                for (var prop in source) {
+                    obj[prop] = source[prop];
+                }
+            }
+    });
+    return obj;
+};
