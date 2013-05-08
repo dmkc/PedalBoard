@@ -1,3 +1,7 @@
+var STATUS_NEW = 0,
+    STATUS_REG = 1,
+    STATUS_OFFER;
+
 var WebSocketServer = require('websocket').server;
 var http = require('http');
 var clients = [],
@@ -24,6 +28,7 @@ function errorHandler(err){
 }
 
 function assignClientID(msg, connection) {
+    // TODO: generate GUID
     // New client registration
     if (msg.client_id === NEW_CLIENT_ID) {
         connection.client_id = connectionCount;
@@ -59,6 +64,7 @@ wsServer.on('request', function(request) {
 
     console.log('New connection from', connection.remoteAddress);
     connection.client_id = NEW_CLIENT_ID;
+    connection.status = STATUS_NEW;
 
     clients.push(connection);
     console.log('Total clients:', clients.length);
@@ -78,7 +84,22 @@ wsServer.on('request', function(request) {
             if (msg.type == "register") {
                 assignClientID(msg, this); 
                 sendTo = [this];
+            /*
+            } else if (msg.type == 'announce_master') {
+                //sendTo =  
 
+            } else if (msg.type == 'announce_slave') {
+            */
+                
+            } else if (msg.dest > 0 && msg.from > 0) {
+                clients.forEach(function (outputConnection) {
+                    console.log((new Date()).toString(), msg.type, "message from:",
+                        connection.client_id, "to", msg.dest);
+                    if (outputConnection.client_id == msg.dest) {
+                        sendTo.push(outputConnection);
+                        return;
+                    }
+                });
             // Broadcast message to all connected clients
             } else {
                 console.log((new Date()).toString(), msg.type, "message from:",
