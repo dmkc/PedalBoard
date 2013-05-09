@@ -11,7 +11,7 @@ define({
 
     sendMessage: function sendMessage(message) {
         var msgString = JSON.stringify(message);
-        console.log("TO WSS:", msgString);
+        //console.log("TO WSS:", msgString);
         this.socket.send(msgString);
     }
 });

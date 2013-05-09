@@ -1,4 +1,17 @@
-require(['master', 'slave'], function(Master, Slave) {
+requirejs.config({
+    shim: {
+      "backbone": {
+          deps: ["underscore"],
+          exports: "Backbone"
+      },
+      "underscore": {
+          exports: "_"
+      }
+    }
+});
+
+
+require(['master', 'slave', 'peerui'], function(Master, Slave, PeerUI) {
     var peer;
     console.log(Master, Slave);       
 
@@ -7,10 +20,13 @@ require(['master', 'slave'], function(Master, Slave) {
     });
     document.querySelector('#makeSlave').addEventListener('click', function(){
         peer = new Slave();
+        window.peer = peer;
     });
 
     document.querySelector('#sendButton').addEventListener('click', function(){
         peer.sendToAll(document.getElementById('dataChannelSend').value)
     });
 
+
 });
+

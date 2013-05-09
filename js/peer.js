@@ -19,6 +19,7 @@ define(['util', 'rtc', 'socket'], function(util, RTCConnection, Socket) {
             that.registered = false;
 
             setTimeout(function(){
+                socket = null;
                 console.log("Attempting to reconnect WebSocket...");
                 Socket.initSocket();
             }, 2000);
@@ -49,6 +50,18 @@ define(['util', 'rtc', 'socket'], function(util, RTCConnection, Socket) {
             this.connections.forEach(function(cnxn) {
                 cnxn.sendData(msg);
             });
+        },
+
+        sendTo: function(client_id, msg) {
+            var cnxn;
+
+            for(var c in this.connections) {
+                var cnxn = this.connections[c];
+
+                if (cnxn.client_id == client_id) {
+                    cnxn.sendData(msg);
+                }
+            };
         },
 
 
