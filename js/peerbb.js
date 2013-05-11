@@ -4,7 +4,7 @@ define(['master', 'slave', 'backbone'], function(Master, Slave, Backbone) {
 
 
     // Data structure for keeping track of model instances and their
-    // subscriptions. Subs because I can't spell "subscription" without typos
+    // subscriptions. Subs because I can't spell "subscription" 
     PeerSubs = {
         // TODO: clean up destroyed models and dead clients
         add: function(model, client_id) {
@@ -20,9 +20,11 @@ define(['master', 'slave', 'backbone'], function(Master, Slave, Backbone) {
                 curModel[model.id] = {};
             }
 
+            // This is what a Subscriber type looks like
             subscr = curModel[model.id][client_id] = {
+                client_id: client_id,
                 model: model,
-                sendAll: true
+                isNew: true
             };
 
             return subscr;
@@ -48,6 +50,8 @@ define(['master', 'slave', 'backbone'], function(Master, Slave, Backbone) {
     }
 
     PeerRouter = {
+        // TODO: add events for when initialization has taken place
+        // TODO: add destruction of connections
         // Map model names to class names for re-instantiation on other clients
         modelMap: {},
 
@@ -59,14 +63,15 @@ define(['master', 'slave', 'backbone'], function(Master, Slave, Backbone) {
             this.peer =  (this.peerOpts.master) ? new Master() : new Slave();
         },
 
+        // Notify all subscribed peers
         broadcast: function(obj) {
             // TODO: handle cases of being disconnected
+            //
             // this.isAlive()
             // Obj can be a collection or a single model
             var modelList = (obj['models'] === undefined) ? [obj]
                                 : obj.models,
                 result = [];
-
 
             for(var m in modelList) {
                 var model = modelList[m],
@@ -74,8 +79,7 @@ define(['master', 'slave', 'backbone'], function(Master, Slave, Backbone) {
 
                 for(var p in subscribers) {
                     if (subscribers[p] !== undefined) {
-                        this.send(model, p);
-                        subscribers[p].sendAll = false;
+                        this.send(subscribers[p]);
                     }
                 }
             }
@@ -86,26 +90,44 @@ define(['master', 'slave', 'backbone'], function(Master, Slave, Backbone) {
             PeerSubs.add(model, client_id);
         },
 
-        send: function(obj, client_id) {
-            this.peer.sendTo(client_id, JSON.stringify(
-                this.flatten(obj)));
+        // Send a model to Subscriber `sendto`
+        send: function(dest) {
+            var model = dest.model,
+                message;
 
-        },
+            console.log('Sending to peer', dest);
 
-        // Prepare collection or model for transmission including only those
-        // models the client is subscribed to.
-        flatten: function(obj, client_id) {
-            if(obj instanceof Backbone.PeerModel) {
-                return this.flattenModel(obj);
-            } else if (obj instanceof Backbone.PeerCollection) {
-                return this.flattenCollection(obj, client_id);
+            if(dest.isNew) {
+                message =  {
+                    type: 'sync_init',
+                    name: dest.model.name,
+                    id:   dest.model,
+                    data: _.clone(dest.model.attributes) 
+                };
+
+                dest.isNew = false;
+
+            } else {
+                message =  {
+                    type: 'sync_update',
+                    name: dest.model.name,
+                    id:   dest.model,
+                    data: dest.model.changedAttributes()
+                };
+
             }
+
+            this.peer.sendTo(dest.client_id, JSON.stringify(message));
+
         },
 
-        flattenModel: function(model, sendAll) {
+        // Prepare collection or model for transmission
+
+        // Return 'flat' attributes-only representation of model.
+        flatten: function(model, isNew) {
             var data;
             
-            if (sendAll) {
+            if (isNew) {
                 data = _.clone(model.attributes);
             } else {
                 data = model.changedAttributes() || _.clone(model.attributes);
@@ -119,6 +141,14 @@ define(['master', 'slave', 'backbone'], function(Master, Slave, Backbone) {
             };
         },
 
+        /*
+        flatten: function(obj, client_id) {
+            if(obj instanceof Backbone.PeerModel) {
+                return this.flattenModel(obj);
+            } else if (obj instanceof Backbone.PeerCollection) {
+                return this.flattenCollection(obj, client_id);
+            }
+        },
         flattenCollection: function(col, client_id) {
             var models = [], modelOpts;
 
@@ -127,7 +157,7 @@ define(['master', 'slave', 'backbone'], function(Master, Slave, Backbone) {
                 if (modelOpts == null) continue;
 
                 models.push(this.flattenModel(modelOpts.model, 
-                                              modelOpts.sendAll));         
+                                              modelOpts.isNew));         
             }
 
             return {
@@ -136,6 +166,7 @@ define(['master', 'slave', 'backbone'], function(Master, Slave, Backbone) {
                 models: models
             }
         }
+        */
 
         
     }
@@ -150,14 +181,15 @@ define(['master', 'slave', 'backbone'], function(Master, Slave, Backbone) {
             opts.synced === true) {
             return;
         }
+        console.log('Significant model event', eventName);
         PeerRouter.broadcast(target);
     }
 
     // A synchronizable model
     Backbone.PeerModel = Backbone.Model.extend({
         constructor: function() {
-            this.on('all', changeCallback);
             Backbone.Model.apply(this, arguments);
+            this.on('all', changeCallback);
             this.id = this.cid;
             //PeerSubs.addInstance(this);
         },
@@ -207,10 +239,11 @@ define(['master', 'slave', 'backbone'], function(Master, Slave, Backbone) {
     window.startTest = function() {
         PeerRouter.init({master:true})
         var model = new TestModel();
-        model.set('blah', 123);
 
         setTimeout( function(){
             model.subscribe(PeerRouter.peer.connections[0].client_id);
+            model.set('blah', 123);
+            model.set('blah', 1833);
         }, 1000);
 
         window.model = model;
