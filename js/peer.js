@@ -48,7 +48,7 @@ define(['util', 'rtc', 'socket'], function(util, RTCConnection, Socket) {
 
         sendToAll: function(msg) {
             this.connections.forEach(function(cnxn) {
-                cnxn.sendData(msg);
+                cnxn.sendData(JSON.stringify(msg));
             });
         },
 
@@ -59,7 +59,7 @@ define(['util', 'rtc', 'socket'], function(util, RTCConnection, Socket) {
                 var cnxn = this.connections[c];
 
                 if (cnxn.client_id == client_id) {
-                    cnxn.sendData(msg);
+                    cnxn.sendData(JSON.stringify(msg));
                 }
             };
         },
@@ -83,8 +83,16 @@ define(['util', 'rtc', 'socket'], function(util, RTCConnection, Socket) {
                 }
             });
 
+            connection.ondatachannel = util.proxy(this.dataChannelCallback, this);
+
             connection.makeOffer();
             return connection;
+        },
+
+        // TODO: a nicer way to bubble the event up
+        dataChannelCallback: function(event) {
+            if (this.ondatachannel)
+                this.ondatachannel(event);
         },
 
         // Connection list 

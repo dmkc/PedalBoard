@@ -9,8 +9,6 @@ define(['util', 'socket'], function(util, Socket) {
         this.client_id = client_id || NEW_CLIENT_ID;
         this.server_id = NEW_CLIENT_ID;
         this.cnxn
-        this.sendChannel
-        this.receiveChannel
         this.dataChannel
         this.started = false;
     }
@@ -45,7 +43,6 @@ define(['util', 'socket'], function(util, Socket) {
                     );
                     this.dataChannel.onopen = util.proxy(this.onDataChannelStateChange, this);
                     this.dataChannel.onclose = util.proxy(this.onDataChannelStateChange, this);
-                    console.log('Created send data channel');
                 }
             } catch (e) {
                 console.log('Create Data channel failed with exception: ' + e.message);
@@ -134,10 +131,18 @@ define(['util', 'socket'], function(util, Socket) {
         onDataChannelStateChange: function() {
             if (!this.dataChannel) return;
 
-            var readyState = this.dataChannel.readyState;
+            var readyState = this.dataChannel.readyState,
+                dataChannel = this.dataChannel;
+
             console.log('Data channel state change: ' + readyState);
+
             if (readyState == "open") {
-                this.dataChannel.onmessage = this.onReceiveMessageCallback;
+                this.dataChannel.onmessage = util.proxy(function(e){ 
+                        e.client_id = this.client_id;
+                        this.onReceiveMessageCallback(e);
+                    }, 
+                    this
+                );
                 //this.dataChannel.onopen = onDataChannelStateChange;
                 //this.dataChannel.onclose = onDataChannelStateChange;
             } 
@@ -145,7 +150,7 @@ define(['util', 'socket'], function(util, Socket) {
 
 
         newDataChannelCallback: function(event) {
-          console.log('Creating new data channee');
+          console.log('Creating data channel for incoming connection');
           this.dataChannel = event.channel;
           this.dataChannel.onmessage = util.proxy(this.onReceiveMessageCallback, this);
           this.dataChannel.onopen = util.proxy(this.onDataChannelStateChange, this);
@@ -166,7 +171,9 @@ define(['util', 'socket'], function(util, Socket) {
         },
 
         onReceiveMessageCallback: function onReceiveMessageCallback(event) {
-            console.log('Received Message:', event.data);
+            if(this.ondatachannel) {
+                this.ondatachannel(event);
+            }
         },
     });
 

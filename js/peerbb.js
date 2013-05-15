@@ -1,4 +1,4 @@
-define(['master', 'slave', 'backbone'], function(Master, Slave, Backbone) {
+define(['master', 'slave', 'backbone', 'util'], function(Master, Slave, Backbone, util) {
     var peers = {},
         subscriptions = {};
 
@@ -7,9 +7,15 @@ define(['master', 'slave', 'backbone'], function(Master, Slave, Backbone) {
     // subscriptions. Subs because I can't spell "subscription" 
     PeerSubs = {
         // TODO: clean up destroyed models and dead clients
-        add: function(model, client_id) {
+        add: function(model, client_id, acknowledged) {
             var subscr,
                 curModel;
+
+            // Whether acknowledgement to sync this model has been received
+            // from the other end.
+            if(acknowledged === undefined){ 
+                var acknowledged = false;
+            }
 
             if (subscriptions[model.name] === undefined) {
                 subscriptions[model.name] = {};
@@ -24,7 +30,7 @@ define(['master', 'slave', 'backbone'], function(Master, Slave, Backbone) {
             subscr = curModel[model.id][client_id] = {
                 client_id: client_id,
                 model: model,
-                isNew: true
+                ack: acknowledged
             };
 
             return subscr;
@@ -49,18 +55,23 @@ define(['master', 'slave', 'backbone'], function(Master, Slave, Backbone) {
         },
     }
 
+    // * Pass {synced: true} option when setting local model from remote
+    // TODO Next: split up router into ModelRouter and UIRouter. 'sync_init'
+    // is just one type of data exchange, model exchange, but other cross-browser
+    // messaging can happen too. Cross-browser event mixin?
     PeerRouter = {
         // TODO: add events for when initialization has taken place
         // TODO: add destruction of connections
         // Map model names to class names for re-instantiation on other clients
         modelMap: {},
 
-        // TODO: peer states
+        // TODO: shoot even for when the router is ready
         init: function(opts) {
             this.peerOpts = _.extend({}, opts);
             this.peerOpts.master = this.peerOpts.master || false;
 
             this.peer =  (this.peerOpts.master) ? new Master() : new Slave();
+            this.peer.ondatachannel = util.proxy(this.dataChannelCallback, this);
         },
 
         // Notify all subscribed peers
@@ -85,9 +96,9 @@ define(['master', 'slave', 'backbone'], function(Master, Slave, Backbone) {
             }
         },
 
-        subscribeModel: function(model, client_id) {
+        subscribeModel: function(model, client_id, acknowledged) {
             // TODO: clean up disconnected peers
-            PeerSubs.add(model, client_id);
+            PeerSubs.add(model, client_id, acknowledged);
         },
 
         // Send a model to Subscriber `sendto`
@@ -97,48 +108,75 @@ define(['master', 'slave', 'backbone'], function(Master, Slave, Backbone) {
 
             console.log('Sending to peer', dest);
 
-            if(dest.isNew) {
+            if(!dest.ack) {
                 message =  {
                     type: 'sync_init',
                     name: dest.model.name,
-                    id:   dest.model,
+                    id:   dest.model.id,
                     data: _.clone(dest.model.attributes) 
                 };
-
-                dest.isNew = false;
 
             } else {
                 message =  {
                     type: 'sync_update',
                     name: dest.model.name,
-                    id:   dest.model,
+                    id:   dest.model.id,
                     data: dest.model.changedAttributes()
                 };
 
             }
 
-            this.peer.sendTo(dest.client_id, JSON.stringify(message));
+            this.peer.sendTo(dest.client_id, message);
 
         },
 
-        // Prepare collection or model for transmission
+        dataChannelCallback: function(e) {
+            var msg,
+                subscr,
+                model;
 
-        // Return 'flat' attributes-only representation of model.
-        flatten: function(model, isNew) {
-            var data;
-            
-            if (isNew) {
-                data = _.clone(model.attributes);
-            } else {
-                data = model.changedAttributes() || _.clone(model.attributes);
+            console.log('Router received data:', e);
+
+            if(!e.data) return;
+
+            try {
+                msg = JSON.parse(e.data);
+            } catch(e) {
+                console.error("DATA CHANNEL ERR: Failed to parse JSON:", e);
+                return;
             }
 
-            return {
-                type: 'model',
-                name: model.name,
-                id:  model.id,
-                data: data
-            };
+            if(msg.type == 'sync_init') {
+                // Init a new model
+                if(PeerSubs.getSubscribers(msg) != null) {
+                    console.error('Model already in sync:', msg);
+                    return;
+                }
+                model = new this.modelMap[msg.name](msg.data);
+                model.id = msg.id;
+                this.subscribeModel(model, e.client_id, true);
+
+                this.trigger('model_new', {
+                    model: model
+                });
+
+                // Acknowledge that we've set up the sync
+                this.peer.sendTo(e.client_id, {
+                    type: 'sync_ack',
+                    name: msg.name,
+                    id: msg.id
+                });
+
+
+            } else if (msg.type == 'sync_ack') {
+                // look for connection and set its acknowledged state to false
+                subscr = PeerSubs.getSubscription(msg, e.client_id)
+                
+                if (subscr != null) {
+                    console.log('Sync acknowledged from', e.client_id, msg);
+                    subscr.ack = true;
+                }
+            }
         },
 
         /*
@@ -157,7 +195,7 @@ define(['master', 'slave', 'backbone'], function(Master, Slave, Backbone) {
                 if (modelOpts == null) continue;
 
                 models.push(this.flattenModel(modelOpts.model, 
-                                              modelOpts.isNew));         
+                                              modelOpts.ack));         
             }
 
             return {
@@ -222,6 +260,8 @@ define(['master', 'slave', 'backbone'], function(Master, Slave, Backbone) {
 
     });
 
+    _.extend(PeerRouter, Backbone.Events);
+
 
     TestModel = Backbone.PeerModel.extend({
         name: 'TestModel'
@@ -236,15 +276,21 @@ define(['master', 'slave', 'backbone'], function(Master, Slave, Backbone) {
     Backbone.TestModel = TestModel;
     window.Backbone = Backbone;
 
-    window.startTest = function() {
-        PeerRouter.init({master:true})
+    window.startTest = function(master) {
+        PeerRouter.init({master: master})
+        PeerRouter.on('model_new', function(data) {
+            console.log('New PeerModel has been init', data);
+            window.model = data.model;
+        });
         var model = new TestModel();
 
-        setTimeout( function(){
-            model.subscribe(PeerRouter.peer.connections[0].client_id);
-            model.set('blah', 123);
-            model.set('blah', 1833);
-        }, 1000);
+        if(master) {
+            setTimeout( function(){
+                model.subscribe(PeerRouter.peer.connections[0].client_id);
+                model.set('blah', 123);
+                model.set('blah', 1833);
+            }, 1000);
+        }
 
         window.model = model;
         window.coll = TestCollection;

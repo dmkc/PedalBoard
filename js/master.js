@@ -39,6 +39,8 @@ define(['util', 'peer', 'socket'], function(util, Peer, Socket) {
                     } 
                     cnxn.respondToOffer(msg);
 
+                // TODO: accept announce_master connections as well for more
+                // complex topologies
                 } else if (msg.type == 'announce_slave') {
                     var cnxn = this.newConnection(msg.client_id, true);
                     cnxn.server_id = this.client_id;
