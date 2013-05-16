@@ -1,11 +1,12 @@
-define(['master', 'slave', 'backbone', 'util'], function(Master, Slave, Backbone, util) {
+// SyncModel is a subclass of Backbone.Model that allows 
+define(['backbone', 'util'], function(Backbone, util) {
     var peers = {},
         subscriptions = {};
 
 
     // Data structure for keeping track of model instances and their
     // subscriptions. Subs because I can't spell "subscription" 
-    PeerSubs = {
+    ModelSubs = {
         // TODO: clean up destroyed models and dead clients
         add: function(model, client_id, acknowledged) {
             var subscr,
@@ -36,7 +37,8 @@ define(['master', 'slave', 'backbone', 'util'], function(Master, Slave, Backbone
             return subscr;
         },
 
-        getSubscribers: function(model) {
+        // Get all Subscriber's for this model
+        getAll: function(model) {
             if (subscriptions[model.name] === undefined)
                 return null;
 
@@ -46,58 +48,53 @@ define(['master', 'slave', 'backbone', 'util'], function(Master, Slave, Backbone
                 return subscriptions[model.name][model.id];
         },
 
-        getSubscription: function(model, client_id) {
-            var subscribers = this.getSubscribers(model);
+        get: function(model, client_id) {
+            var subscribers = this.getAll(model);
 
-            return (subscribers[client_id] !== undefined) ?
+            return (subscribers != null &&
+                    subscribers[client_id] !== undefined) ?
                 subscribers[client_id] :
                 null;
         },
     }
 
-    // TODO Next: split up router into ModelRouter and UIRouter. 'sync_init'
+    // TODO: split up router into ModelRouter and UIRouter. 'sync_init'
     // is just one type of data exchange, model exchange, but other cross-browser
     // messaging can happen too. Cross-browser event mixin?
-    PeerRouter = {
+    SyncRouter = {
         // TODO: add events for when initialization has taken place
         // TODO: add destruction of connections
         // Map model names to class names for re-instantiation on other clients
         modelMap: {},
 
         // TODO: shoot even for when the router is ready
-        init: function(opts) {
-            this.peerOpts = _.extend({}, opts);
-            this.peerOpts.master = this.peerOpts.master || false;
-
-            this.peer =  (this.peerOpts.master) ? new Master() : new Slave();
+        init: function(peer) {
+            if(!peer) throw "SyncRouter needs to be initiated with a Peer node"
+            this.peer = peer;
             this.peer.ondatachannel = util.proxy(this.dataChannelCallback, this);
         },
 
         // Notify all subscribed peers
-        broadcast: function(obj) {
-            // TODO: handle cases of being disconnected
-            //
-            // this.isAlive()
-            // Obj can be a collection or a single model
-            var modelList = (obj['models'] === undefined) ? [obj]
-                                : obj.models,
-                result = [];
+        broadcast: function(subscriber, except) {
+            // TODO: handle cases of being disconnected; this.isAlive()
+            var result = [],
+                subscribers;
 
-            for(var m in modelList) {
-                var model = modelList[m],
-                    subscribers = PeerSubs.getSubscribers(model);
+            subscribers = ModelSubs.getAll(subscriber);
 
-                for(var p in subscribers) {
-                    if (subscribers[p] !== undefined) {
-                        this.send(subscribers[p]);
-                    }
+            for(var p in subscribers) {
+                if (subscribers[p] !== undefined &&
+                    (subscribers[p] !== except)) {
+                    this.send(subscribers[p]);
                 }
             }
         },
 
         subscribeModel: function(model, client_id, acknowledged) {
-            // TODO: clean up disconnected peers
-            PeerSubs.add(model, client_id, acknowledged);
+            if(ModelSubs.get(model, client_id) != null) {
+                throw 'This model is already being synced';
+            }
+            ModelSubs.add(model, client_id, acknowledged);
         },
 
         // Send a model to Subscriber `sendto`
@@ -148,9 +145,12 @@ define(['master', 'slave', 'backbone', 'util'], function(Master, Slave, Backbone
             if(msg.type == 'sync_init') {
                 // Init a new model and set up a peer subscription for the
                 // client that sent the sync init. 
-                if(PeerSubs.getSubscribers(msg) != null) {
+                if(ModelSubs.getAll(msg) != null) {
                     console.error('Model already being synched:', msg);
                     return;
+                }
+                if(this.modelMap[msg.name] === undefined) {
+                    throw "Unknown model: " + msg.name;
                 }
                 model = new this.modelMap[msg.name](msg.data);
                 model.id = msg.id;
@@ -170,14 +170,14 @@ define(['master', 'slave', 'backbone', 'util'], function(Master, Slave, Backbone
 
             } else if (msg.type == 'sync_ack') {
                 // look for connection and set its acknowledged state to false
-                subscr = PeerSubs.getSubscription(msg, e.client_id)
+                subscr = ModelSubs.get(msg, e.client_id)
                 
                 if (subscr != null) {
                     console.log('Sync acknowledged from', e.client_id, msg);
                     subscr.ack = true;
                 }
             } else if (msg.type == 'sync_update') {
-                subscr = PeerSubs.getSubscription(msg, e.client_id)
+                subscr = ModelSubs.get(msg, e.client_id)
 
                 if (subscr == null) {
                     console.error('Attempting to update a model that ' +
@@ -190,12 +190,13 @@ define(['master', 'slave', 'backbone', 'util'], function(Master, Slave, Backbone
                     noBroadcast: true
                 });
 
+                this.broadcast(model, subscr);
             }
         },
 
         /*
         flatten: function(obj, client_id) {
-            if(obj instanceof Backbone.PeerModel) {
+            if(obj instanceof Backbone.SyncModel) {
                 return this.flattenModel(obj);
             } else if (obj instanceof Backbone.PeerCollection) {
                 return this.flattenCollection(obj, client_id);
@@ -234,81 +235,39 @@ define(['master', 'slave', 'backbone', 'util'], function(Master, Slave, Backbone
             return;
         }
         console.log('Significant model event', eventName);
-        PeerRouter.broadcast(target);
+        SyncRouter.broadcast(target);
     }
 
     // A synchronizable model
-    Backbone.PeerModel = Backbone.Model.extend({
+    Backbone.SyncModel = Backbone.Model.extend({
         constructor: function() {
             Backbone.Model.apply(this, arguments);
             this.on('all', changeCallback);
             this.id = this.cid;
-            //PeerSubs.addInstance(this);
+            //ModelSubs.addInstance(this);
         },
 
         subscribe: function(client_id) {
-            PeerRouter.subscribeModel(this, client_id);
+            SyncRouter.subscribeModel(this, client_id);
         },
 
     });
 
     // Override extending to keep track of name to model mapping, which we'll
     // need to instantiate models on other peers
-    Backbone.PeerModel.extend = function(obj) {
-        if (!obj.name) throw "A PeerModel must have a name";
+    Backbone.SyncModel.extend = function(obj) {
+        if (!obj.name) throw "A SyncModel must have a name";
         var result = Backbone.Model.extend.apply(this, arguments);
-        PeerRouter.modelMap[obj.name] = result;
+        SyncRouter.modelMap[obj.name] = result;
         result.name = obj.name;
         return result;
     }
 
-    // COLLECTIONS
-    Backbone.PeerCollection = Backbone.Collection.extend({
-        constructor: function() {
-            if (!this.name) throw "A PeerCollection must have a name";
-            else console.log('Instance of', this.name);
 
-            this.on('all', changeCallback);
-            Backbone.Collection.apply(this, arguments);
-        },
+    // Mix in bb events
+    _.extend(SyncRouter, Backbone.Events);
 
-    });
-
-    _.extend(PeerRouter, Backbone.Events);
-
-
-    TestModel = Backbone.PeerModel.extend({
-        name: 'TestModel'
-    });
-
-    TestCollection = Backbone.PeerCollection.extend({
-        name: 'TestCollection'
-    });
-
-    Backbone.PeerRouter = PeerRouter;
-    Backbone.PeerSubs = PeerSubs;
-    Backbone.TestModel = TestModel;
-    window.Backbone = Backbone;
-
-    window.startTest = function(master) {
-        PeerRouter.init({master: master})
-        PeerRouter.on('model_new', function(data) {
-            console.log('New PeerModel has been init', data);
-            window.model = data.model;
-        });
-        var model = new TestModel();
-
-        if(master) {
-            setTimeout( function(){
-                model.subscribe(PeerRouter.peer.connections[0].client_id);
-                model.set('blah', 123);
-                model.set('blah', 1833);
-            }, 1000);
-        }
-
-        window.model = model;
-        window.coll = TestCollection;
-    }
+    Backbone.SyncRouter = SyncRouter;
 
     return Backbone;
 });

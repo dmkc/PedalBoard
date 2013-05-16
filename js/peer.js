@@ -1,4 +1,5 @@
-define(['util', 'rtc', 'socket'], function(util, RTCConnection, Socket) {
+define(['util', 'rtc', 'socket', 'underscore'], 
+       function(util, RTCConnection, Socket,  _) {
     // Magic number for an unregistered client
     NEW_CLIENT_ID = -1;
 
