@@ -55,7 +55,6 @@ define(['master', 'slave', 'backbone', 'util'], function(Master, Slave, Backbone
         },
     }
 
-    // * Pass {synced: true} option when setting local model from remote
     // TODO Next: split up router into ModelRouter and UIRouter. 'sync_init'
     // is just one type of data exchange, model exchange, but other cross-browser
     // messaging can happen too. Cross-browser event mixin?
@@ -147,9 +146,10 @@ define(['master', 'slave', 'backbone', 'util'], function(Master, Slave, Backbone
             }
 
             if(msg.type == 'sync_init') {
-                // Init a new model
+                // Init a new model and set up a peer subscription for the
+                // client that sent the sync init. 
                 if(PeerSubs.getSubscribers(msg) != null) {
-                    console.error('Model already in sync:', msg);
+                    console.error('Model already being synched:', msg);
                     return;
                 }
                 model = new this.modelMap[msg.name](msg.data);
@@ -176,6 +176,20 @@ define(['master', 'slave', 'backbone', 'util'], function(Master, Slave, Backbone
                     console.log('Sync acknowledged from', e.client_id, msg);
                     subscr.ack = true;
                 }
+            } else if (msg.type == 'sync_update') {
+                subscr = PeerSubs.getSubscription(msg, e.client_id)
+
+                if (subscr == null) {
+                    console.error('Attempting to update a model that ' +
+                                  'has not been set up yet.', msg);
+                    return;
+                }
+                model = subscr.model;
+
+                model.set(msg.data, {
+                    noBroadcast: true
+                });
+
             }
         },
 
@@ -216,7 +230,7 @@ define(['master', 'slave', 'backbone', 'util'], function(Master, Slave, Backbone
         // Broadcast all interesting non-sync originating events
         if (eventName in uninteresting ||
             eventName.indexOf(':') >= 0 || 
-            opts.synced === true) {
+            opts.noBroadcast === true) {
             return;
         }
         console.log('Significant model event', eventName);

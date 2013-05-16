@@ -90,6 +90,7 @@ define(['util', 'rtc', 'socket'], function(util, RTCConnection, Socket) {
         },
 
         // TODO: a nicer way to bubble the event up
+        // TODO: ignore all messages outside of this session ID
         dataChannelCallback: function(event) {
             if (this.ondatachannel)
                 this.ondatachannel(event);
