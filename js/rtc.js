@@ -69,9 +69,7 @@ define(['util', 'socket'], function(util, Socket) {
         },
 
         respondToOffer : function(msg) {
-            // Handle offer/answer handshake
             this.cnxn.setRemoteDescription(new RTCSessionDescription(msg));
-            console.log("Sending session answer to PRI");
             this.cnxn.createAnswer(util.proxy(this.setLocalAndSendMessage, this));
         },
 
@@ -134,7 +132,7 @@ define(['util', 'socket'], function(util, Socket) {
             var readyState = this.dataChannel.readyState,
                 dataChannel = this.dataChannel;
 
-            console.log('Data channel state change: ' + readyState);
+            console.log('Data channel state change: ', readyState);
 
             if (readyState == "open") {
                 this.dataChannel.onmessage = util.proxy(function(e){ 
@@ -146,6 +144,8 @@ define(['util', 'socket'], function(util, Socket) {
                 //this.dataChannel.onopen = onDataChannelStateChange;
                 //this.dataChannel.onclose = onDataChannelStateChange;
             } 
+
+            this.dataChannelStateCallback(this);
         },
 
 
@@ -153,8 +153,8 @@ define(['util', 'socket'], function(util, Socket) {
           console.log('Creating data channel for incoming connection');
           this.dataChannel = event.channel;
           this.dataChannel.onmessage = util.proxy(this.onReceiveMessageCallback, this);
-          this.dataChannel.onopen = util.proxy(this.onDataChannelStateChange, this);
-          this.dataChannel.onclose = util.proxy(this.onDataChannelStateChange, this);
+          this.dataChannel.addEventListener('open', util.proxy(this.onDataChannelStateChange, this));
+          this.dataChannel.addEventListener('close', util.proxy(this.onDataChannelStateChange, this));
         },
 
         onIceCandidate: function onIceCandidate(event) {
@@ -165,9 +165,7 @@ define(['util', 'socket'], function(util, Socket) {
                     id: event.candidate.sdpMid,
                     candidate: event.candidate.candidate
                 });
-            } else {
-                console.log("End of candidates.");
-            }
+            } 
         },
 
         onReceiveMessageCallback: function onReceiveMessageCallback(event) {

@@ -16,7 +16,6 @@ define(['util', 'peer', 'socket'], function(util, Peer, Socket) {
             var msg = JSON.parse(message.data),
                 cnxn;
 
-            console.log('Received message', msg);
             if (!this.registered) {
                 if (msg.type === 'register') {
                     this.client_id = msg.client_id;
@@ -38,6 +37,7 @@ define(['util', 'peer', 'socket'], function(util, Peer, Socket) {
                         this.addConnection(cnxn);
                     } 
                     cnxn.respondToOffer(msg);
+                    console.log('Responding to new offer:', msg);
 
                 // TODO: accept announce_master connections as well for more
                 // complex topologies

@@ -1,5 +1,5 @@
-define(['util', 'rtc', 'socket', 'underscore'], 
-       function(util, RTCConnection, Socket,  _) {
+define(['util', 'rtc', 'socket', 'underscore', 'backbone'], 
+       function(util, RTCConnection, Socket,  _, Backbone) {
     // Magic number for an unregistered client
     NEW_CLIENT_ID = -1;
 
@@ -34,7 +34,8 @@ define(['util', 'rtc', 'socket', 'underscore'],
 
     }
 
-    Peer.prototype = Object.create({
+    Peer.prototype = Object.create(
+        _.extend({
         // Handle WebSocket messages
         processMessage: function(message) {
             throw 'Not implemented';
@@ -77,14 +78,21 @@ define(['util', 'rtc', 'socket', 'underscore'],
 
             // TODO: Clean up disconnected connections in Master
             connection.cnxn.addEventListener('icechange', function(e){
+                console.log('ICE state change:', e, 
+                            'ICE connection state', this.iceConnectionState,
+                            'ICE gathering state', this.iceGatheringState);
 
                 if (this.iceConnectionState == 'disconnected') {
+                    that.dataChannelStateCallback(connection);
                     console.log('ICE disconnect. Removing connection:', connection);
-                    that.removeConnection(connection);
+                    setTimeout(function(){
+                        that.removeConnection(connection);
+                    }, 1000);
                 }
             });
 
             connection.ondatachannel = util.proxy(this.dataChannelCallback, this);
+            connection.dataChannelStateCallback = util.proxy(this.dataChannelStateCallback, this);
 
             connection.makeOffer();
             return connection;
@@ -95,6 +103,15 @@ define(['util', 'rtc', 'socket', 'underscore'],
         dataChannelCallback: function(event) {
             if (this.ondatachannel)
                 this.ondatachannel(event);
+        },
+
+        dataChannelStateCallback: function(connection) {
+            var state = connection.dataChannel.readyState;
+            this.trigger('data_channel_state', {
+                state: state,
+                client_id: connection.client_id
+            });
+
         },
 
         // Connection list 
@@ -124,7 +141,7 @@ define(['util', 'rtc', 'socket', 'underscore'],
             this.connections.splice(this.connections.indexOf(cnxn), 1);
             cnxn.close();
         },
-    });
+    }, Backbone.Events));
 
     return Peer;
 });

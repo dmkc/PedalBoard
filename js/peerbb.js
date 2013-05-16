@@ -72,6 +72,7 @@ define(['backbone', 'util'], function(Backbone, util) {
             if(!peer) throw "SyncRouter needs to be initiated with a Peer node"
             this.peer = peer;
             this.peer.ondatachannel = util.proxy(this.dataChannelCallback, this);
+            this.peer.on('data_channel_state', util.proxy(this.dataChannelState, this));
         },
 
         // Notify all subscribed peers
@@ -192,6 +193,10 @@ define(['backbone', 'util'], function(Backbone, util) {
 
                 this.broadcast(model, subscr);
             }
+        },
+
+        dataChannelState: function(e) {
+            console.log('Data channel state change', e);    
         },
 
         /*
