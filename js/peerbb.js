@@ -1,7 +1,7 @@
 // SyncModel is a subclass of Backbone.Model that allows 
 define(['backbone', 'util'], function(Backbone, util) {
     var peers = {},
-        subscriptions = {};
+        subscriptions = {},
 
 
     // Data structure for keeping track of model instances and their
@@ -56,7 +56,7 @@ define(['backbone', 'util'], function(Backbone, util) {
                 subscribers[client_id] :
                 null;
         },
-    }
+    },
 
     // TODO: split up router into ModelRouter and UIRouter. 'sync_init'
     // is just one type of data exchange, model exchange, but other cross-browser
@@ -72,7 +72,7 @@ define(['backbone', 'util'], function(Backbone, util) {
             if(!peer) throw "SyncRouter needs to be initiated with a Peer node"
             this.peer = peer;
             this.peer.ondatachannel = util.proxy(this.dataChannelCallback, this);
-            this.peer.on('data_channel_state', util.proxy(this.dataChannelState, this));
+            this.peer.on('connection_state', util.proxy(this.dataChannelState, this));
         },
 
         // Notify all subscribed peers
@@ -123,7 +123,11 @@ define(['backbone', 'util'], function(Backbone, util) {
 
             }
 
-            this.peer.sendTo(dest.client_id, message);
+            try {
+                this.peer.sendTo(dest.client_id, message);
+            } catch(e) {
+                console.error('Error sending message to', dest.client_id, message);
+            }
 
         },
 
@@ -196,7 +200,8 @@ define(['backbone', 'util'], function(Backbone, util) {
         },
 
         dataChannelState: function(e) {
-            console.log('Data channel state change', e);    
+            // pass through connection state changes
+            this.trigger('connection_state', e);
         },
 
         /*
@@ -227,10 +232,10 @@ define(['backbone', 'util'], function(Backbone, util) {
         */
 
         
-    }
+    },
 
     
-    function changeCallback(eventName, target, opts) {
+    changeCallback = function changeCallback(eventName, target, opts) {
         var uninteresting = ['request', 'sync', 'invalid', 'route'];
 
         // Broadcast all interesting non-sync originating events
@@ -241,7 +246,7 @@ define(['backbone', 'util'], function(Backbone, util) {
         }
         console.log('Significant model event', eventName);
         SyncRouter.broadcast(target);
-    }
+    };
 
     // A synchronizable model
     Backbone.SyncModel = Backbone.Model.extend({

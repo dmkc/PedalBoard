@@ -22,8 +22,8 @@ define(['util', 'rtc', 'socket', 'underscore', 'backbone'],
             setTimeout(function(){
                 socket = null;
                 console.log("Attempting to reconnect WebSocket...");
-                Socket.initSocket();
-            }, 2000);
+                socket = Socket.initSocket();
+            }, 1000);
         });
 
         socket.addEventListener('open', function() {
@@ -83,6 +83,7 @@ define(['util', 'rtc', 'socket', 'underscore', 'backbone'],
                             'ICE gathering state', this.iceGatheringState);
 
                 if (this.iceConnectionState == 'disconnected') {
+                    connection.dataChannel.close();
                     that.dataChannelStateCallback(connection);
                     console.log('ICE disconnect. Removing connection:', connection);
                     setTimeout(function(){
@@ -107,7 +108,7 @@ define(['util', 'rtc', 'socket', 'underscore', 'backbone'],
 
         dataChannelStateCallback: function(connection) {
             var state = connection.dataChannel.readyState;
-            this.trigger('data_channel_state', {
+            this.trigger('connection_state', {
                 state: state,
                 client_id: connection.client_id
             });

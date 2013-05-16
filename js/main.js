@@ -21,19 +21,29 @@ require(['master', 'slave', 'peerbb', 'peerui'], function(Master, Slave, PeerUI)
         name: 'TestModel'
     });
 
+    if(window.location.hash == '#slave') {
+        startTest(false);
+    } else {
+        startTest(true);
+    }
+
     function startTest(master) {
-        SyncRouter.init( (master) ? new Master() : new Slave() );
-        SyncRouter.on('model_new', function(data) {
+        Backbone.SyncRouter.init( (master) ? new Master() : new Slave() );
+        Backbone.SyncRouter.on('model_new', function(data) {
             console.log('New SyncModel init request', data);
             window.model = data.model;
         });
         var model = new TestModel();
 
         if(master) {
-            setTimeout( function(){
-                model.subscribe(SyncRouter.peer.connections[0].client_id);
-                model.set('blah', 123);
-                model.set('blah', 1833);
+            Backbone.SyncRouter.on('connection_state', function(e){
+                if (e.state == 'open') {
+                    model.subscribe(e.client_id);
+                    model.set('blah', 123);
+                    model.set('blah', 1833);
+                } else {
+                    console.log('Closed connection to peer', e.client_id);
+                }
             }, 1000);
         }
 
