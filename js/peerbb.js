@@ -93,9 +93,10 @@ define(['backbone', 'util'], function(Backbone, util) {
 
         subscribeModel: function(model, client_id, acknowledged) {
             if(ModelSubs.get(model, client_id) != null) {
-                throw 'This model is already being synced';
+                console.error('This model is already being synced', model);
             }
             ModelSubs.add(model, client_id, acknowledged);
+            this.send(ModelSubs.get(model, client_id));
         },
 
         // Send a model to Subscriber `sendto`
