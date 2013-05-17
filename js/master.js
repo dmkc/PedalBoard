@@ -21,7 +21,7 @@ define(['util', 'peer', 'socket'], function(util, Peer, Socket) {
                     this.client_id = msg.client_id;
                     this.registered = true;
 
-                    console.log("Registered with server, ID:", this.client_id);
+                    console.log("Master: register with server ID", this.client_id);
 
                 } else {
                     this.register();
@@ -37,7 +37,7 @@ define(['util', 'peer', 'socket'], function(util, Peer, Socket) {
                         this.addConnection(cnxn);
                     } 
                     cnxn.respondToOffer(msg);
-                    console.log('Responding to new offer:', msg);
+                    console.log('Master: Responding to new offer:', msg);
 
                 // TODO: accept announce_master connections as well for more
                 // complex topologies
@@ -47,7 +47,7 @@ define(['util', 'peer', 'socket'], function(util, Peer, Socket) {
                     this.addConnection(cnxn);
                     
                 } else if (msg.type == 'answer') {
-                    console.log("Received answer from a peer");
+                    console.log("Master: Received answer from a peer");
                     cnxn.answer(msg);
 
                 } else if (msg.type === 'candidate') {

@@ -45,7 +45,7 @@ define(['util', 'socket'], function(util, Socket) {
                     this.dataChannel.onclose = util.proxy(this.onDataChannelStateChange, this);
                 }
             } catch (e) {
-                console.log('Create Data channel failed with exception: ' + e.message);
+                console.error('RTC: Creating data channel failed', e);
             }
             cnxn.addEventListener('icecandidate', 
                 util.proxy(this.onIceCandidate, this));
@@ -54,7 +54,7 @@ define(['util', 'socket'], function(util, Socket) {
 
 
             cnxn.onstatechange = function(e){
-                console.log('Connection state change:', 
+                console.log('RTC: Connection state change:', 
                     cnxn.readyState,
                     e);
             };
@@ -78,7 +78,7 @@ define(['util', 'socket'], function(util, Socket) {
         },
 
         addCandidate : function(msg) {
-            console.log("Adding new ICE candidate");
+            console.log("RTC: Add new ICE candidate");
             var candidate = new RTCIceCandidate({
                 sdpMLineIndex:msg.label, 
                 candidate:msg.candidate
@@ -95,18 +95,16 @@ define(['util', 'socket'], function(util, Socket) {
 
         sendData: function(data) {
           this.dataChannel.send(data);
-          console.log('Sent Data: ' + data);
         },
 
         close: function() {
+            console.log('RTC: Closing peer connection', this);
             if (this.dataChannel) {
-                console.log('Closing data channel');
                 this.dataChannel.close();
                 this.dataChannel = null;
             }
             if (this.cnxn) this.cnxn.close();
             this.cnxn = null;
-            console.log('Closed peer connection.');
 
             this.started = false;
         },
@@ -132,8 +130,7 @@ define(['util', 'socket'], function(util, Socket) {
             var readyState = this.dataChannel.readyState,
                 dataChannel = this.dataChannel;
 
-            console.log('Data channel state change: ', readyState);
-
+            console.log('RTC: Data channel state change', readyState);
             if (readyState == "open") {
                 this.dataChannel.onmessage = util.proxy(function(e){ 
                         e.client_id = this.client_id;
@@ -141,8 +138,6 @@ define(['util', 'socket'], function(util, Socket) {
                     }, 
                     this
                 );
-                //this.dataChannel.onopen = onDataChannelStateChange;
-                //this.dataChannel.onclose = onDataChannelStateChange;
             } 
 
             this.dataChannelStateCallback(this);
@@ -150,7 +145,7 @@ define(['util', 'socket'], function(util, Socket) {
 
 
         newDataChannelCallback: function(event) {
-          console.log('Creating data channel for incoming connection');
+          console.log('RTC: Created new data channel.');
           this.dataChannel = event.channel;
           this.dataChannel.onmessage = util.proxy(this.onReceiveMessageCallback, this);
           this.dataChannel.addEventListener('open', util.proxy(this.onDataChannelStateChange, this));

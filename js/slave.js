@@ -20,7 +20,7 @@ define(['util', 'peer', 'socket'], function(util, Peer, Socket) {
                     this.client_id = msg.client_id;
                     this.registered = true;
 
-                    console.log("Registered with server, ID:", this.client_id);
+                    console.log("Slave: registered with server ID", this.client_id);
 
                 } else {
                     this.register();
@@ -57,7 +57,7 @@ define(['util', 'peer', 'socket'], function(util, Peer, Socket) {
 
                     cnxn.respondToOffer(msg);
                 } else if (msg.type == 'answer' && cnxn != null) {
-                    console.log("Received answer from a peer");
+                    console.log("Slave: answer from a peer");
                     cnxn.answer(msg);
                     cnxn.client_id = msg.client_id;
 

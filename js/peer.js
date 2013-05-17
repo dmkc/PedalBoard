@@ -16,14 +16,14 @@ define(['util', 'rtc', 'socket', 'underscore', 'backbone'],
         socket.addEventListener('message', util.proxy(this.processMessage, this));
 
         socket.addEventListener('close',  function() {
-            console.log('Socket closed');
+            console.log('Peer: WebSocket closed');
             that.registered = false;
 
             setTimeout(function(){
                 socket = null;
-                console.log("Attempting to reconnect WebSocket...");
+                console.log("Peer: Attempting to reconnect WebSocket");
                 socket = Socket.initSocket();
-            }, 1000);
+            }, 1500);
         });
 
         socket.addEventListener('open', function() {
@@ -48,13 +48,21 @@ define(['util', 'rtc', 'socket', 'underscore', 'backbone'],
             });
         },
 
-        sendToAll: function(msg) {
+        sendToAll: function(msg, except) {
+            console.log('PEERS: Sending msg to all peers', msg);
+
             this.connections.forEach(function(cnxn) {
-                cnxn.sendData(JSON.stringify(msg));
+                if(cnxn.client_id === except) return;
+                try {
+                    cnxn.sendData(JSON.stringify(msg));
+                } catch(e) {
+                    console.log("Peer: Couldn't send data to", cnxn);
+                }
             });
         },
 
         sendTo: function(client_id, msg) {
+            console.log('PEERS: Sending msg to client', client_id, msg);
             var cnxn;
 
             for(var c in this.connections) {
@@ -78,14 +86,14 @@ define(['util', 'rtc', 'socket', 'underscore', 'backbone'],
 
             // TODO: Clean up disconnected connections in Master
             connection.cnxn.addEventListener('icechange', function(e){
-                console.log('ICE state change:', e, 
-                            'ICE connection state', this.iceConnectionState,
-                            'ICE gathering state', this.iceGatheringState);
+                console.log('Peer: ICE state change:', e, 
+                            'connection:', this.iceConnectionState,
+                            'gathering:', this.iceGatheringState);
 
                 if (this.iceConnectionState == 'disconnected') {
                     connection.dataChannel.close();
                     that.dataChannelStateCallback(connection);
-                    console.log('ICE disconnect. Removing connection:', connection);
+                    console.log('Peer: ICE disconnect. Removing connection:', connection);
                     setTimeout(function(){
                         that.removeConnection(connection);
                     }, 1000);

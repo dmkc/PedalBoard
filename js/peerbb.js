@@ -8,15 +8,9 @@ define(['backbone', 'util'], function(Backbone, util) {
     // subscriptions. Subs because I can't spell "subscription" 
     ModelSubs = {
         // TODO: clean up destroyed models and dead clients
-        add: function(model, client_id, acknowledged) {
+        add: function(model) {
             var subscr,
                 curModel;
-
-            // Whether acknowledgement to sync this model has been received
-            // from the other end.
-            if(acknowledged === undefined){ 
-                var acknowledged = false;
-            }
 
             if (subscriptions[model.name] === undefined) {
                 subscriptions[model.name] = {};
@@ -24,50 +18,48 @@ define(['backbone', 'util'], function(Backbone, util) {
             curModel = subscriptions[model.name];
 
             if (curModel[model.id] === undefined) {
-                curModel[model.id] = {};
+                curModel[model.id] = model
             }
-
-            // This is what a Subscriber type looks like
-            subscr = curModel[model.id][client_id] = {
-                client_id: client_id,
-                model: model,
-                ack: acknowledged
-            };
-
-            return subscr;
         },
 
-        // Get all Subscriber's for this model
-        getAll: function(model) {
-            if (subscriptions[model.name] === undefined)
-                return null;
-
-            if (subscriptions[model.name][model.id] === undefined)
+        getAll: function(name) {
+            if (subscriptions[name] === undefined)
                 return null;
             else
-                return subscriptions[model.name][model.id];
+                return subscriptions[name];
         },
 
-        get: function(model, client_id) {
-            var subscribers = this.getAll(model);
+        get: function(name, model_id) {
+            var subscribers = this.getAll(name);
 
-            return (subscribers != null &&
-                    subscribers[client_id] !== undefined) ?
-                subscribers[client_id] :
+            return (subscribers != null) ?
+                subscribers[model_id] :
                 null;
         },
     },
 
-    // TODO: split up router into ModelRouter and UIRouter. 'sync_init'
-    // is just one type of data exchange, model exchange, but other cross-browser
-    // messaging can happen too. Cross-browser event mixin?
+    // Basically Backbone events wrapped around data channels managed 
+    // by a `Peer`
+    // SyncRouter should probably use event router
+    EventRouter = {
+        init: function(peer) {
+            if(!peer) throw "EventRouter needs to be initiated with a Peer node"
+            this.peer = peer;
+            this.peer.on('connection_state', util.proxy(this.dataChannelState, this));
+        },
+
+        send: function(type, body) {
+            this.peer.sendToAll({
+                    type: type,
+                    body: body
+            });
+        }
+    },
+
     SyncRouter = {
-        // TODO: add events for when initialization has taken place
-        // TODO: add destruction of connections
         // Map model names to class names for re-instantiation on other clients
         modelMap: {},
 
-        // TODO: shoot even for when the router is ready
         init: function(peer) {
             if(!peer) throw "SyncRouter needs to be initiated with a Peer node"
             this.peer = peer;
@@ -75,61 +67,18 @@ define(['backbone', 'util'], function(Backbone, util) {
             this.peer.on('connection_state', util.proxy(this.dataChannelState, this));
         },
 
-        // Notify all subscribed peers
-        broadcast: function(subscriber, except) {
-            // TODO: handle cases of being disconnected; this.isAlive()
-            var result = [],
-                subscribers;
+        makeMsg: function(model, type) {
+            var type = type || 'sync_update';
 
-            subscribers = ModelSubs.getAll(subscriber);
-
-            for(var p in subscribers) {
-                if (subscribers[p] !== undefined &&
-                    (subscribers[p] !== except)) {
-                    this.send(subscribers[p]);
+            return {
+                type: type,
+                body: {
+                    name: model.name,
+                    id:   model.id,
+                    data: (type != 'sync_full') ? model.changedAttributes() 
+                                 : _.clone(model.attributes)
                 }
-            }
-        },
-
-        subscribeModel: function(model, client_id, acknowledged) {
-            if(ModelSubs.get(model, client_id) != null) {
-                console.error('This model is already being synced', model);
-            }
-            ModelSubs.add(model, client_id, acknowledged);
-            this.send(ModelSubs.get(model, client_id));
-        },
-
-        // Send a model to Subscriber `sendto`
-        send: function(dest) {
-            var model = dest.model,
-                message;
-
-            console.log('Sending to peer', dest);
-
-            if(!dest.ack) {
-                message =  {
-                    type: 'sync_init',
-                    name: dest.model.name,
-                    id:   dest.model.id,
-                    data: _.clone(dest.model.attributes) 
-                };
-
-            } else {
-                message =  {
-                    type: 'sync_update',
-                    name: dest.model.name,
-                    id:   dest.model.id,
-                    data: dest.model.changedAttributes()
-                };
-
-            }
-
-            try {
-                this.peer.sendTo(dest.client_id, message);
-            } catch(e) {
-                console.error('Error sending message to', dest.client_id, message);
-            }
-
+            };
         },
 
         dataChannelCallback: function(e) {
@@ -144,59 +93,60 @@ define(['backbone', 'util'], function(Backbone, util) {
             try {
                 msg = JSON.parse(e.data);
             } catch(e) {
-                console.error("DATA CHANNEL ERR: Failed to parse JSON:", e);
+                console.error("BB: Failed to parse JSON:", e);
                 return;
             }
 
-            if(msg.type == 'sync_init') {
-                // Init a new model and set up a peer subscription for the
-                // client that sent the sync init. 
-                if(ModelSubs.getAll(msg) != null) {
-                    console.error('Model already being synched:', msg);
+            if (msg.type == 'sync_update' || 
+                msg.type == 'sync_full') 
+            {
+                model = ModelSubs.get(msg.body.name, msg.body.id);
+
+                // Model already in the pool
+                if(model != null) {
+                    model.set(msg.body.data, {
+                        noBroadcast: true
+                    });
+
+                    this.peer.sendToAll(
+                        this.makeMsg(model), 
+                        e.client_id);
+
+                // Model not yet present in the pool
+                } else {
+                    if(this.modelMap[msg.body.name] === undefined) {
+                        throw "Unknown model: " + msg.body.name;
+                    }
+                    model = new this.modelMap[msg.body.name](msg.body.data);
+                    model.id = msg.body.id;
+
+                    // Request the rest of the model if this wasn't a full dump
+                    if(msg.type != 'sync_full') {
+                        this.peer.sendTo(
+                            e.client_id,
+                            this.makeMsg(model, 'sync_request')
+                        );
+                    }
+
+                    this.trigger('model_new', {
+                        model: model
+                    });
+                }
+
+            // Another peer requesting full data dump of model
+            } else if (msg.type == 'sync_request') {
+                model = ModelSubs.get(msg.body.name, msg.body.id);
+
+                // Model already in the pool
+                if(model == null) {
+                    console.error('BB: Request to sync a missing model', msg);
                     return;
                 }
-                if(this.modelMap[msg.name] === undefined) {
-                    throw "Unknown model: " + msg.name;
-                }
-                model = new this.modelMap[msg.name](msg.data);
-                model.id = msg.id;
-                this.subscribeModel(model, e.client_id, true);
 
-                this.trigger('model_new', {
-                    model: model
-                });
-
-                // Acknowledge that we've set up the sync
-                this.peer.sendTo(e.client_id, {
-                    type: 'sync_ack',
-                    name: msg.name,
-                    id: msg.id
-                });
-
-
-            } else if (msg.type == 'sync_ack') {
-                // look for connection and set its acknowledged state to false
-                subscr = ModelSubs.get(msg, e.client_id)
-                
-                if (subscr != null) {
-                    console.log('Sync acknowledged from', e.client_id, msg);
-                    subscr.ack = true;
-                }
-            } else if (msg.type == 'sync_update') {
-                subscr = ModelSubs.get(msg, e.client_id)
-
-                if (subscr == null) {
-                    console.error('Attempting to update a model that ' +
-                                  'has not been set up yet.', msg);
-                    return;
-                }
-                model = subscr.model;
-
-                model.set(msg.data, {
-                    noBroadcast: true
-                });
-
-                this.broadcast(model, subscr);
+                this.peer.sendTo(
+                    e.client_id, 
+                    this.makeMsg(model, 'sync_full')
+                );
             }
         },
 
@@ -204,34 +154,6 @@ define(['backbone', 'util'], function(Backbone, util) {
             // pass through connection state changes
             this.trigger('connection_state', e);
         },
-
-        /*
-        flatten: function(obj, client_id) {
-            if(obj instanceof Backbone.SyncModel) {
-                return this.flattenModel(obj);
-            } else if (obj instanceof Backbone.PeerCollection) {
-                return this.flattenCollection(obj, client_id);
-            }
-        },
-        flattenCollection: function(col, client_id) {
-            var models = [], modelOpts;
-
-            for(var m in col.models) {
-                modelOpts = this.getModel(col.models[m], client_id);
-                if (modelOpts == null) continue;
-
-                models.push(this.flattenModel(modelOpts.model, 
-                                              modelOpts.ack));         
-            }
-
-            return {
-                type: 'collection',
-                name: col.name,
-                models: models
-            }
-        }
-        */
-
         
     },
 
@@ -246,7 +168,9 @@ define(['backbone', 'util'], function(Backbone, util) {
             return;
         }
         console.log('Significant model event', eventName);
-        SyncRouter.broadcast(target);
+        SyncRouter.peer.sendToAll(
+            SyncRouter.makeMsg(target)
+        );
     };
 
     // A synchronizable model
@@ -254,13 +178,15 @@ define(['backbone', 'util'], function(Backbone, util) {
         constructor: function() {
             Backbone.Model.apply(this, arguments);
             this.on('all', changeCallback);
-            this.id = this.cid;
-            //ModelSubs.addInstance(this);
-        },
 
-        subscribe: function(client_id) {
-            SyncRouter.subscribeModel(this, client_id);
-        },
+            if(arguments[0] !== undefined &&
+               arguments[0].id !== undefined)
+                this.id = arguments[0].id;
+            else
+                this.id = this.cid;
+
+            ModelSubs.add(this);
+        }
 
     });
 

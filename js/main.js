@@ -51,10 +51,11 @@ require(['master', 'slave', 'peerbb', 'peerui', 'jquery-1.9.1.min'],
     }
 
     function startTest(master) {
-        var model = new TestModel(),
+        var model,
             sliderView,
             sliderEl = function(){return document.querySelector('#testSlider')};
 
+        
         Backbone.SyncRouter.init( (master) ? new Master() : new Slave() );
         // Slave setup
         Backbone.SyncRouter.on('model_new', function(data) {
@@ -69,11 +70,12 @@ require(['master', 'slave', 'peerbb', 'peerui', 'jquery-1.9.1.min'],
 
         // Master setup
         if(master) {
+            model = new TestModel();
             model.set('slider', 1);
             Backbone.SyncRouter.on('connection_state', function(e){
-                console.log("New peer. Subsribing to model");
+                console.log("New peer connection");
+
                 if (e.state == 'open') {
-                    model.subscribe(e.client_id);
                 } else {
                     console.log('Closed connection to peer', e.client_id);
                 }
