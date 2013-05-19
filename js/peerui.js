@@ -1,4 +1,33 @@
-define(['master', 'slave', 'backbone'], function(Master, Slave, Backbone) {
+define(['backbone', 'util'], function(Backbone, util) {
+    // Basically Backbone events wrapped around data channels managed 
+    // by a `Peer`
+    // SyncRouter should probably use event router
+    PeerUI = {
+        init: function(peer) {
+            if(!peer) throw "EventRouter needs to be initiated with a Peer node"
+            this.peer = peer;
+            this.peer.on('datachannel', util.proxy(this.handleMessage, this));
+
+            console.log("PEERUI: Init with peer", peer);
+        },
+
+        send: function(type, body) {
+            this.peer.sendToAll({
+                    type: type,
+                    body: body
+            });
+        },
+
+        handleMessage: function(e) {
+            var msg = e.dataParsed;
+
+            if(msg.type == 'peerui') {
+
+            }
+        }
+    }
+
+    return PeerUI;
     /*
     dui.pushScreen(
         client_id, // ID of client to push this to. This can be a different

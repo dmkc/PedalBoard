@@ -14,10 +14,9 @@ requirejs.config({
 });
 
 
-require(['master', 'slave', 'peerbb', 'peerui', 'jquery-1.9.1.min'], 
-        function(Master, Slave, PeerUI, jQuery) {
+require(['master', 'slave', 'syncmodel', 'peerui', 'jquery-1.9.1.min', 'audio'], 
+        function(Master, Slave, Backbone, PeerUI, jQuery, AudioEngine) {
     var peer;
-    console.log(Master, Slave);       
 
     window.Backbone = Backbone;
 
@@ -56,7 +55,10 @@ require(['master', 'slave', 'peerbb', 'peerui', 'jquery-1.9.1.min'],
             sliderEl = function(){return document.querySelector('#testSlider')};
 
         
-        Backbone.SyncRouter.init( (master) ? new Master() : new Slave() );
+        peer =  (master) ? new Master() : new Slave();
+        PeerUI.init(peer);
+        Backbone.SyncRouter.init(peer);
+
         // Slave setup
         Backbone.SyncRouter.on('model_new', function(data) {
             console.log('New SyncModel init request', data);

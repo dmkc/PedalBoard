@@ -110,8 +110,21 @@ define(['util', 'rtc', 'socket', 'underscore', 'backbone'],
         // TODO: a nicer way to bubble the event up
         // TODO: ignore all messages outside of this session ID
         dataChannelCallback: function(event) {
-            if (this.ondatachannel)
-                this.ondatachannel(event);
+            var json;
+            if(!event.data) {
+                console.error("PEER:Empty data channel message");
+                return
+            }
+
+            try {
+                json = JSON.parse(event.data);
+            } catch(e) {
+                console.error("PEER: Couldn't parse message JSON");
+                return
+            }
+
+            event.dataParsed = json;
+            this.trigger('datachannel', event);
         },
 
         dataChannelStateCallback: function(connection) {

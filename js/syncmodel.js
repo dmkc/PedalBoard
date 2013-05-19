@@ -6,7 +6,7 @@ define(['backbone', 'util'], function(Backbone, util) {
 
     // Data structure for keeping track of model instances and their
     // subscriptions. Subs because I can't spell "subscription" 
-    ModelSubs = {
+    ModelPool = {
         // TODO: clean up destroyed models and dead clients
         add: function(model) {
             var subscr,
@@ -38,23 +38,6 @@ define(['backbone', 'util'], function(Backbone, util) {
         },
     },
 
-    // Basically Backbone events wrapped around data channels managed 
-    // by a `Peer`
-    // SyncRouter should probably use event router
-    EventRouter = {
-        init: function(peer) {
-            if(!peer) throw "EventRouter needs to be initiated with a Peer node"
-            this.peer = peer;
-            this.peer.on('connection_state', util.proxy(this.dataChannelState, this));
-        },
-
-        send: function(type, body) {
-            this.peer.sendToAll({
-                    type: type,
-                    body: body
-            });
-        }
-    },
 
     SyncRouter = {
         // Map model names to class names for re-instantiation on other clients
@@ -63,7 +46,9 @@ define(['backbone', 'util'], function(Backbone, util) {
         init: function(peer) {
             if(!peer) throw "SyncRouter needs to be initiated with a Peer node"
             this.peer = peer;
-            this.peer.ondatachannel = util.proxy(this.dataChannelCallback, this);
+            this.peer.on('datachannel', 
+                         util.proxy(this.dataChannelCallback, this)
+                        );
             this.peer.on('connection_state', util.proxy(this.dataChannelState, this));
         },
 
@@ -82,25 +67,14 @@ define(['backbone', 'util'], function(Backbone, util) {
         },
 
         dataChannelCallback: function(e) {
-            var msg,
+            var msg = e.dataParsed,
                 subscr,
                 model;
-
-            console.log('Router received data:', e);
-
-            if(!e.data) return;
-
-            try {
-                msg = JSON.parse(e.data);
-            } catch(e) {
-                console.error("BB: Failed to parse JSON:", e);
-                return;
-            }
 
             if (msg.type == 'sync_update' || 
                 msg.type == 'sync_full') 
             {
-                model = ModelSubs.get(msg.body.name, msg.body.id);
+                model = ModelPool.get(msg.body.name, msg.body.id);
 
                 // Model already in the pool
                 if(model != null) {
@@ -135,7 +109,7 @@ define(['backbone', 'util'], function(Backbone, util) {
 
             // Another peer requesting full data dump of model
             } else if (msg.type == 'sync_request') {
-                model = ModelSubs.get(msg.body.name, msg.body.id);
+                model = ModelPool.get(msg.body.name, msg.body.id);
 
                 // Model already in the pool
                 if(model == null) {
@@ -185,7 +159,7 @@ define(['backbone', 'util'], function(Backbone, util) {
             else
                 this.id = this.cid;
 
-            ModelSubs.add(this);
+            ModelPool.add(this);
         }
 
     });
