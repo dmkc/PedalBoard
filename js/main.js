@@ -14,11 +14,15 @@ requirejs.config({
 });
 
 
-require(['master', 'slave', 'syncmodel', 'peerui', 'jquery-1.9.1.min', 'audio'], 
-        function(Master, Slave, Backbone, PeerUI, jQuery, AudioEngine) {
+require(['master', 'slave', 'syncmodel', 'peerui', 'jquery-1.9.1.min', 'pedals'], 
+        function(Master, Slave, Backbone, PeerUI, jQuery, Pedals) {
     var peer;
 
     window.Backbone = Backbone;
+    window.Pedals = Pedals;
+
+    window.CM = new Pedals.CompressorModel();
+    window.CN = new Pedals.CompressorNode().init(window.CM);
 
     TestModel = Backbone.SyncModel.extend({
         name: 'TestModel'

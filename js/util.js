@@ -28,5 +28,12 @@ define({
             var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
             return v.toString(16);
         });
-    }
+    },
+
+    inherit: function(from, ownMethods) {
+        var f = function(){};
+        f.prototype = this.extend({}, from.prototype, ownMethods);
+
+        return f;
+    },
 });

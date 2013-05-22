@@ -142,9 +142,13 @@ define(['backbone', 'util'], function(Backbone, util) {
             return;
         }
         console.log('Significant model event', eventName);
-        SyncRouter.peer.sendToAll(
-            SyncRouter.makeMsg(target)
-        );
+        try {
+            SyncRouter.peer.sendToAll(
+                SyncRouter.makeMsg(target)
+            );
+        } catch(e) {
+            console.error("Failed to send changes", e);
+        }
     };
 
     // A synchronizable model
@@ -179,6 +183,7 @@ define(['backbone', 'util'], function(Backbone, util) {
     _.extend(SyncRouter, Backbone.Events);
 
     Backbone.SyncRouter = SyncRouter;
+    Backbone.ModelPool = ModelPool;
 
     return Backbone;
 });
