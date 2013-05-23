@@ -6,14 +6,56 @@
         <base target="_blank">
         <title>Web Audio test</title>
         <style>
+            body {
+                font-family: Menlo, monospace;
+            }
+
+            #templates { 
+                display: none;
+            }
+
+            .pedal {
+                background: #eee;
+                padding: 1em;
+                border-radius: 1em;
+            }
+
+            .pedal label {
+                display: block;
+            }
         </style>
 
         <script data-main="js/pedal_test" src="js/require.min.js"></script>
     </head>
     <body>
-        <button onClick="PedalBoard.playSample(0)">Play sample 1</button>
-        <button onClick="PedalBoard.liveInput()">Use live input</button>
-        <button onClick="PedalBoard.stopInput()">Stop this madness</button>
+        <button id="play_sample_0">Play sample 1</button>
+        <button id="live_input">Use live input</button>
+        <button id="stop_input">Stop this madness</button>
+
+        <button id="add_compressor">Add compressor</button>
+
+        <div id="pedals">
+            
+        </div>
         
     </body>
+    <div id="templates">
+        <div id="template_compressor" class="pedal pedal_compressor">
+            <label>Attack
+                <input class="attack" type="range" min="0.0" max="1.0" step="0.01">
+            </label>
+            <label>Threshold
+                <input class="threshold" type="range" min="-100" max="0">
+            </label>
+            <label>Ratio
+                <input class="ratio" type="range" min="1" max="20">
+            </label>
+            <label>Knee
+                <input class="knee" type="range" min="0" max="40">
+            </label>
+            <label>Gain
+                <input class="gain" type="range" min="0" max=10>
+            </label>
+        </div>
+    </div>
 </html>

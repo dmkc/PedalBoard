@@ -45,18 +45,16 @@ define(
 
             // Add a pedal to the end of the pedal chain
             // TODO: reordering of pedals
-            addPedal: function(name) {
+            addPedal: function(name, model) {
                 var pedalNode,
-                    pedalModel,
                     order = this.pedals.length;
 
                 if(Pedals[name+'Node'] === undefined) {
                     throw 'No such pedal exists:' + name;
                 } else {
-                    pedalModel = new Pedals.PedalModel();
                     pedalNode = new Pedals[name+'Node']().init(
                         this.context, 
-                        pedalModel);
+                        model);
                     this.pedals.push(pedalNode);
                     this.reconnectPedals();
                 }
