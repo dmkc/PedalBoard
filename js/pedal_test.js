@@ -12,13 +12,10 @@ requirejs.config({
       }
     }
 });
-require(['master', 'slave', 'syncmodel', 'peerui', 'jquery-1.9.1.min','board', 'pedals'], 
-        function(Master, Slave, Backbone, PeerUI, jQuery, PedalBoard, Pedals) {
+require(['master', 'slave', 'syncmodel', 'peerui', 'jquery-1.9.1.min','controllers', 'views'], 
+        function(Master, Slave, Backbone, PeerUI, jQuery, Controllers, Views) {
     var peer;
 
     window.Backbone = Backbone;
-    window.Pedals = Pedals;
-    window.PedalBoard = PedalBoard.init();
-
-    PedalBoard.addPedal('Compressor');
+    window.View = new Views.PedalBoardView().init();
 })

@@ -3,16 +3,12 @@
  */
 define(
     ['buffer-loader', 'util', 'syncmodel', 'pedals'], 
-    function(BufferLoader, util, Backbone) {
-        var context;
-        var bufferLoader,
-            gainNode;
-
+    function(BufferLoader, util, Backbone, Pedals) {
         var PedalBoardModel = Backbone.SyncModel.extend({
             name: 'PBModel'
         });
 
-        PedalBoard = {
+        var PedalBoard = {
             init: function() {
                 // Fix up prefixing
                 var that = this;
@@ -74,7 +70,7 @@ define(
 
                 // There is always at least masterGain to connect into
                 sources.push({
-                    input: this.masterGain,
+                    input:  this.masterGain,
                     output: this.masterGain,
                 });
                 this.source.disconnect();
@@ -82,6 +78,7 @@ define(
 
                 for(; p<sources.length; p++) {
                     cur = sources[p];
+                    // If this is the last pedal, route it into audiocontext
                     next = sources[p+1] || {
                         input: this.context.destination,
                         output: this.context.destination,
@@ -103,11 +100,13 @@ define(
                 this.reconnectPedals();
             },
 
+            // Stop all input, live or a sample
             stopInput: function() {
                 if (this.source.stop) this.source.stop(0);
                 this.source.disconnect();
             },
 
+            // Switch context to live input
             liveInput: function() {
                 var that = this;
                 this.stopInput();
@@ -127,5 +126,7 @@ define(
         }
     _.extend(PedalBoard, Backbone.Events);
 
-    return PedalBoard;
+    return {
+        PedalBoard: PedalBoard
+    };
 });

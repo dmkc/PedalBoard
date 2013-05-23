@@ -1,17 +1,17 @@
 define(
     ['util', 'syncmodel'], function(util, Backbone) {
-    // Generic pedal prototypes
+    // A model used by all pedals
     var PedalNode = function(){},
 
         PedalModel = Backbone.SyncModel.extend({
             name: 'PedalModel',
         });
 
-
+    // A generic pedal others inherit from
     PedalNode.prototype = {
-        // Generic change handler useful if there's only one node that's 
-        // both the input and output.
-        parameterChange: function(e, node) {
+        // Generic change handler useful when there's only one node which
+        // is both the input and output.
+        paramChange: function(e, node) {
             var changes = e.changedAttributes(),
                 node = node || this.input;
 
@@ -26,19 +26,12 @@ define(
     return {
         PedalModel: PedalModel,
 
-        // Compressor
-        CompressorView: Backbone.View.extend({
-            init: function() {
-
-            }
-        }),
-
         CompressorNode: util.inherit(PedalNode, {
             init: function(context, model) {
                 this.model = model;
                 this.context = context;
                 this.model.on({
-                    'change': this.parameterChange
+                    'change': this.paramChange
                 }, this);
 
                 this.input = context.createDynamicsCompressor();
@@ -47,7 +40,7 @@ define(
                 return this; 
             },
 
-            parameterChange: function(e) {
+            paramChange: function(e) {
                 var changes = e.changedAttributes();
 
                 if(changes['gain'] !== undefined) {
@@ -55,7 +48,7 @@ define(
                     delete changes.gain;
                 }
 
-                PedalNode.prototype.parameterChange.call(this, e, this.input);
+                PedalNode.prototype.paramChange.call(this, e, this.input);
             }
 
         }),
