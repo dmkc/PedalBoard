@@ -12,14 +12,41 @@ define(
                 },
 
                 changeHandler: function(e) {
-                    this.model.set(e.target.className, e.target.value);
+                    var node = e.target,
+                        val;
+
+                    if (node.className.indexOf('bypass') !== -1)
+                        val = node.checked;
+                    else 
+                        val = e.target.value;
+
+                    this.model.set(e.target.className, val);
                 }
             }),
 
             CompressorView = PedalView.extend({
                 template: function() {
-                    return $('#template_compressor').removeAttr('id');
+                    return $('#template_compressor').clone().removeAttr('id');
                 },
+
+                init: function() {
+                    return this;
+                },
+
+                changeHandler: function(e) {
+                    PedalView.prototype.changeHandler.apply(this, arguments);
+                }
+
+            }),
+
+            StereoChorusView = PedalView.extend({
+                template: function() {
+                    return $('#template_stereochorus').clone().removeAttr('id');
+                },
+
+                changeHandler: function(e) {
+                    PedalView.prototype.changeHandler.apply(this, arguments);
+                }
 
             }),
 
@@ -29,10 +56,11 @@ define(
                 dom: {},
                 // TODO: switch to touch/tap events with zepto
                 events: {
-                    'click #add_compressor': 'addPedal',
-                    'click #play_sample_0': 'playSample',
-                    'click #live_input': 'liveInput',
-                    'click #stop_input': 'stopInput'
+                    'click #add_compressor' : 'addPedal',
+                    'click #add_stereochorus' : 'addPedal',
+                    'click #play_sample_0'  : 'playSample',
+                    'click #live_input'     : 'liveInput',
+                    'click #stop_input'     : 'stopInput'
                 },
 
                 init: function() {
@@ -45,19 +73,30 @@ define(
                 },
 
                 addPedal: function(e) {
-                    var view, model;
-
+                    var view, 
+                        model = new Pedals.PedalModel();
 
                     if (e.target.id == 'add_compressor') {
-                        model = new Pedals.PedalModel();
                         this.controller.addPedal('Compressor', model);
+
                         view = new CompressorView({
                             model: model
-                        });
-                        this.dom.pedals.append(view.$el);
-                    }
+                        }).init();
+                    } else if (e.target.id == 'add_stereochorus') {
+                        this.controller.addPedal('StereoChorus', model);
 
+                        view = new StereoChorusView({
+                            model: model
+                        });
+                    }
+                    model.on('change:bypass', this.bypassPedal, this);
+                    this.dom.pedals.append(view.$el);
                 },
+
+                bypassPedal: function(model) {
+                    this.controller.bypassPedal(model, model.get('bypass'));
+                },
+
                 playSample: function(e) {
                     this.controller.playSample(0);
                 },
@@ -70,6 +109,7 @@ define(
             })
     return {
         CompressorView: CompressorView,
+        StereoChorusView: StereoChorusView,
         PedalBoardView: PedalBoardView
     }
 })

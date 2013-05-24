@@ -52,6 +52,7 @@ define(['backbone', 'util'], function(Backbone, util) {
     }
 
     function Screen(name) {
+        // too long
         dom.append(loadScreenFromDisk(name));
 
         function loadScreenFromDisk(name) {

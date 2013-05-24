@@ -18,18 +18,17 @@ define(
 
                 window.AudioContext = window.AudioContext || window.webkitAudioContext;
                 this.context = new AudioContext();
-                // TODO: turn this into a gain pedal
+                // TODO: turn this into a gain pedal?
                 this.masterGain = this.context.createGainNode();
                 this.masterGain.connect(this.context.destination);
                 this.source = this.context.createBufferSource();
-
 
                 // Load a few samples in the highly unlikely case the user 
                 // doesn't have an American Strat kicking around
                 new BufferLoader(
                     this.context,
                     [
-                        //'/samples/demarco1.wav',
+                        '/samples/demarco1.wav',
                         '/samples/gibson_E_maj.wav'
                     ],
                     function loadedBuffers(buffers) {
@@ -44,10 +43,10 @@ define(
             },
 
             // Add a pedal to the end of the pedal chain
-            // TODO: reordering of pedals
-            addPedal: function(name, model) {
+            addPedal: function(name, model, index) {
                 var pedalNode,
-                    order = this.pedals.length;
+                    order = this.pedals.length,
+                    index = index || this.pedals.length;
 
                 if(Pedals[name+'Node'] === undefined) {
                     throw 'No such pedal exists:' + name;
@@ -55,35 +54,80 @@ define(
                     pedalNode = new Pedals[name+'Node']().init(
                         this.context, 
                         model);
-                    this.pedals.push(pedalNode);
+                    this.pedals.splice(index, 0, pedalNode);
                     this.reconnectPedals();
                 }
             },
 
-            reconnectPedals: function() {
-                var sources = this.pedals.slice(0),
-                    curNode,
-                    nextNode,
-                    p = 0;
+            removePedal: function(index) {
+                return this.pedals.splice(index, 1);
+            },
 
-                // There is always at least masterGain to connect into
+            // Reconnect all pedals according to their order in the
+            // source list
+            reconnectPedals: function() {
+                var sources = this.getSources(),
+                    curNode,
+                    nextNode;
+
+                this.source.disconnect();
+
+                for(var p=0; p<sources.length-1; p++) {
+                    cur = sources[p];
+                    // If this is the last pedal, route it into audiocontext
+                    next = sources[p+1];
+                    cur.output.disconnect();
+                    cur.output.connect(next.input);
+                }
+            },
+
+            // Disconnect pedal from node flow. 
+            // `model` can be either a reference to a pedal model, or an
+            // index into the pedal array
+            bypassPedal: function(model, bypass) {
+                var index = (isNaN(new Number(index))) 
+                            ? this.getPedalIndex(model)+1
+                            : ++model,
+                    bypass = (bypass !== undefined) ? bypass : true,
+                    sources = this.getSources(),
+                    inNode = sources[index-1],
+                    outNode = sources[index+1]
+
+                inNode.output.disconnect();
+                if(bypass) {
+                    sources[index].output.disconnect();
+                    inNode.output.connect(outNode.input);
+                } else {
+                    inNode.output.connect(sources[index].input);
+                    sources[index].output.connect(outNode.input);
+                }
+            },
+
+            // Return list of pedals, with source at the head and masterGain
+            // at the end of the list.
+            getSources: function() {
+                // Clone source array
+                var sources = this.pedals.slice(0)
+
                 sources.push({
                     input:  this.masterGain,
                     output: this.masterGain,
                 });
-                this.source.disconnect();
-                this.source.connect(sources[p].input);
+                sources.unshift({
+                    input: this.source,
+                    output: this.source
+                });
+                return sources;
+            },
 
-                for(; p<sources.length; p++) {
-                    cur = sources[p];
-                    // If this is the last pedal, route it into audiocontext
-                    next = sources[p+1] || {
-                        input: this.context.destination,
-                        output: this.context.destination,
-                    };
-                    cur.output.disconnect();
-                    cur.output.connect(next.input);
+            // Get index in the array based on pedal's model. Used by the main
+            // view which has no idea what pedals are
+            getPedalIndex: function(model) {
+                for(var p=0; p<this.pedals.length; p++) {
+                    if(this.pedals[p].model === model) 
+                        return p;
                 }
+                return -1;
             },
 
             // Play one of the pre-loaded samples in a loop

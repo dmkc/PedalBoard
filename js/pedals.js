@@ -17,7 +17,7 @@ define(
 
             for(var c in changes) {
                 if (node[c] !== undefined) {
-                    node[c].value = changes[c];
+                    node[c].value = parseFloat(changes[c]);
                 }
             }
         },
@@ -51,6 +51,80 @@ define(
                 PedalNode.prototype.paramChange.call(this, e, this.input);
             }
 
+        }),
+
+        StereoChorusNode: util.inherit(PedalNode, {
+            init: function(context, model) {
+                this.model = model;
+                this.context = context;
+                this.model.on({
+                    'change': this.paramChange
+                }, this);
+
+                var splitter = context.createChannelSplitter(2);
+                var merger = context.createChannelMerger(2);
+                var inputNode = context.createGainNode();
+                var delayLNode = context.createDelayNode();
+                var delayRNode = context.createDelayNode();
+                var osc = context.createOscillator();
+                var scldepth = context.createGainNode();
+                var scrdepth = context.createGainNode();
+
+                inputNode.connect( splitter );
+
+                delayLNode.delayTime.value = 0.005;
+                delayRNode.delayTime.value = 0.005;
+                scldelay = delayLNode;
+                scrdelay = delayRNode;
+                splitter.connect( delayLNode, 0 );
+                splitter.connect( delayRNode, 1 );
+
+                // depth of change to the delay:
+                scldepth.gain.value = 0.0005 
+                scrdepth.gain.value = -0.0005; 
+
+                osc.type = osc.SINE;
+                osc.frequency.value = 0.5;
+                scspeed = osc;
+
+                osc.connect(scldepth);
+                osc.connect(scrdepth);
+
+                scldepth.connect(delayLNode.delayTime);
+                scrdepth.connect(delayRNode.delayTime);
+
+                delayLNode.connect( merger, 0, 0 );
+                delayRNode.connect( merger, 0, 1 );
+
+                osc.start(0);
+
+                this.input = inputNode;
+                this.output = merger;
+
+                this.scldepth = scldepth;
+                this.scrdepth = scrdepth;
+                this.delayLNode = delayLNode;
+                this.delayRNode = delayRNode;
+                this.osc = osc;
+
+                return this;
+            },
+
+            paramChange: function(e) {
+                var changes = e.changedAttributes();
+
+                if(changes['depth'] !== undefined) {
+                    this.scldepth.gain.value = parseFloat(changes['depth']);
+                    this.scrdepth.gain.value = -parseFloat(changes['depth']);
+                } 
+                if(changes['delay'] !== undefined) {
+                    this.delayLNode.delayTime.value = parseFloat(changes['delay']);
+                    this.delayRNode.delayTime.value = parseFloat(changes['delay']);
+                } 
+                if(changes['speed'] !== undefined) {
+                    this.osc.frequency.value = parseFloat(changes['speed']);
+                } 
+            }
         }),
     };
 });

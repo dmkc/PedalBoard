@@ -130,7 +130,6 @@ define(['backbone', 'util'], function(Backbone, util) {
         },
         
     },
-
     
     changeCallback = function changeCallback(eventName, target, opts) {
         var uninteresting = ['request', 'sync', 'invalid', 'route'];
