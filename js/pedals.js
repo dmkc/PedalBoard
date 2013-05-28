@@ -9,6 +9,9 @@ define(
 
     // A generic pedal others inherit from
     PedalNode.prototype = {
+        init: function() {
+            this.bypass = false;
+        },
         // Generic change handler useful when there's only one node which
         // is both the input and output.
         paramChange: function(e, node) {

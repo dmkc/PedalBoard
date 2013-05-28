@@ -90,14 +90,16 @@ define(
                             : ++model,
                     bypass = (bypass !== undefined) ? bypass : true,
                     sources = this.getSources(),
-                    inNode = sources[index-1],
-                    outNode = sources[index+1]
+                    inNode = this.getPrev(index),
+                    outNode = this.getNext(index)
 
                 inNode.output.disconnect();
                 if(bypass) {
                     sources[index].output.disconnect();
+                    sources[index].bypass = true;
                     inNode.output.connect(outNode.input);
                 } else {
+                    sources[index].bypass = false;
                     inNode.output.connect(sources[index].input);
                     sources[index].output.connect(outNode.input);
                 }
@@ -105,6 +107,7 @@ define(
 
             // Return list of pedals, with source at the head and masterGain
             // at the end of the list.
+            // TODO: Convenient but confusing.
             getSources: function() {
                 // Clone source array
                 var sources = this.pedals.slice(0)
@@ -112,10 +115,12 @@ define(
                 sources.push({
                     input:  this.masterGain,
                     output: this.masterGain,
+                    bypass: false
                 });
                 sources.unshift({
                     input: this.source,
-                    output: this.source
+                    output: this.source,
+                    bypass: false
                 });
                 return sources;
             },
@@ -128,6 +133,22 @@ define(
                         return p;
                 }
                 return -1;
+            },
+
+            // Get the next non-bypassed pedal
+            getNext: function(index) {
+                var pedals = this.getSources();
+                while(pedals[index+1].bypass) index++;
+
+                return pedals[index+1];
+            },
+
+            // Get the previous non-bypassed pedal
+            getPrev: function(index) {
+                var pedals = this.getSources();
+                while(pedals[index-1].bypass) index--;
+
+                return pedals[index-1];
             },
 
             // Play one of the pre-loaded samples in a loop

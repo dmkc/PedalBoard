@@ -34,6 +34,14 @@ define({
         var f = function(){};
         f.prototype = this.extend({}, from.prototype, ownMethods);
 
+        // Init from parent prototype
+        if (from.prototype.init !== undefined &&
+            ownMethods.init !== undefined) {
+            f.prototype.init = function() {
+                from.prototype.init.apply(this, arguments);
+                return ownMethods.init.apply(this, arguments);
+            }
+        }
         return f;
     },
 });
