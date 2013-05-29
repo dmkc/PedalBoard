@@ -12,8 +12,8 @@ requirejs.config({
       }
     }
 });
-require(['master', 'slave', 'syncmodel', 'peerui', 'jquery-1.9.1.min','controllers', 'views'], 
-        function(Master, Slave, Backbone, PeerUI, jQuery, Controllers, Views) {
+require(['rtc/master', 'rtc/slave', 'rtc/syncmodel', 'peerui', 'jquery-1.9.1.min','views'], 
+        function(Master, Slave, Backbone, PeerUI, jQuery, Views) {
     var peer;
 
     window.Backbone = Backbone;

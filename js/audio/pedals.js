@@ -1,11 +1,7 @@
 define(
-    ['util', 'syncmodel'], function(util, Backbone) {
+    ['util', 'rtc/syncmodel', 'buffer-loader'], function(util, Backbone, BufferLoader) {
     // A model used by all pedals
-    var PedalNode = function(){},
-
-        PedalModel = Backbone.SyncModel.extend({
-            name: 'PedalModel',
-        });
+    var PedalNode = function(){};
 
     // A generic pedal others inherit from
     PedalNode.prototype = {
@@ -26,14 +22,13 @@ define(
         },
     };
 
-    return {
-        PedalModel: PedalModel,
 
+    return {
         CompressorNode: util.inherit(PedalNode, {
             init: function(context, model) {
-                this.model = model;
+                this.params = model;
                 this.context = context;
-                this.model.on({
+                this.params.on({
                     'change': this.paramChange
                 }, this);
 
@@ -58,9 +53,9 @@ define(
 
         StereoChorusNode: util.inherit(PedalNode, {
             init: function(context, model) {
-                this.model = model;
+                this.params = model;
                 this.context = context;
-                this.model.on({
+                this.params.on({
                     'change': this.paramChange
                 }, this);
 

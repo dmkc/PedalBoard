@@ -1,4 +1,4 @@
-define(['util', 'peer', 'socket'], function(util, Peer, Socket) {
+define(['util', 'rtc/peer', 'rtc/socket'], function(util, Peer, Socket) {
     function Slave() {
         this.master = false;
         Peer.call(this);

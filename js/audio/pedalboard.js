@@ -2,7 +2,7 @@
  * track
  */
 define(
-    ['buffer-loader', 'util', 'syncmodel', 'pedals'], 
+    ['buffer-loader', 'util', 'rtc/syncmodel', 'audio/pedals'], 
     function(BufferLoader, util, Backbone, Pedals) {
         var PedalBoardModel = Backbone.SyncModel.extend({
             name: 'PBModel'
@@ -39,17 +39,23 @@ define(
                     }
                 ).load();
 
+                // Listen for new PedalModel objects and add corresponding
+                // audio nodes.
+                Backbone.ModelPool.on('add', this.addPedal,this)
+
                 return this;
             },
 
             // Add a pedal to the end of the pedal chain
-            addPedal: function(name, model, index) {
+            addPedal: function(model, index) {
                 var pedalNode,
                     order = this.pedals.length,
-                    index = index || this.pedals.length;
+                    index = index || this.pedals.length,
+                    name = model.name.substr(0, model.name.length-5);
 
+                // Figure out pedal based on model name
                 if(Pedals[name+'Node'] === undefined) {
-                    throw 'No such pedal exists:' + name;
+                    return;
                 } else {
                     pedalNode = new Pedals[name+'Node']().init(
                         this.context, 

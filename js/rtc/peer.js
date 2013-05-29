@@ -1,4 +1,4 @@
-define(['util', 'rtc', 'socket', 'underscore', 'backbone'], 
+define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'], 
        function(util, RTCConnection, Socket,  _, Backbone) {
     // Magic number for an unregistered client
     NEW_CLIENT_ID = -1;

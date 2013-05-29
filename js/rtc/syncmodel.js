@@ -5,7 +5,7 @@ define(['backbone', 'util'], function(Backbone, util) {
 
 
     // Data structure for keeping track of model instances and their
-    // subscriptions. Subs because I can't spell "subscription" 
+    // subscriptions. 
     ModelPool = {
         // TODO: clean up destroyed models and dead clients
         add: function(model) {
@@ -20,6 +20,8 @@ define(['backbone', 'util'], function(Backbone, util) {
             if (curModel[model.id] === undefined) {
                 curModel[model.id] = model
             }
+
+            this.trigger('add', model);
         },
 
         getAll: function(name) {
@@ -102,7 +104,7 @@ define(['backbone', 'util'], function(Backbone, util) {
                         );
                     }
 
-                    this.trigger('model_new', {
+                    this.trigger('model_sync', {
                         model: model
                     });
                 }
@@ -180,6 +182,7 @@ define(['backbone', 'util'], function(Backbone, util) {
 
     // Mix in bb events
     _.extend(SyncRouter, Backbone.Events);
+    _.extend(ModelPool, Backbone.Events);
 
     Backbone.SyncRouter = SyncRouter;
     Backbone.ModelPool = ModelPool;

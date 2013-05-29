@@ -1,10 +1,15 @@
 define(
-    ['util', 'syncmodel', 'controllers', 'pedals'], 
-    function(util, Backbone, Controllers, Pedals) {
+    ['util', 'rtc/syncmodel', 'audio/pedals', 'audio/pedalboard', 'models'], 
+    function(util, Backbone, Pedals, PedalBoard, Models) {
         // A generic pedal that notifies its model of parameter changes
         var PedalView = Backbone.View.extend({
                 el: function() {
                     return this.template();
+                },
+
+                init: function() {
+                    this.model.on('change', this.modelChange, this);
+                    return this;
                 },
 
                 events: {
@@ -21,16 +26,16 @@ define(
                         val = e.target.value;
 
                     this.model.set(e.target.className, val);
-                }
+                },
+
+                modelChange: function(model) {
+                    console.log('PEDAL VIEW: model param change');
+                },
             }),
 
             CompressorView = PedalView.extend({
                 template: function() {
                     return $('#template_compressor').clone().removeAttr('id');
-                },
-
-                init: function() {
-                    return this;
                 },
 
                 changeHandler: function(e) {
@@ -64,7 +69,7 @@ define(
                 },
 
                 init: function() {
-                    this.controller = Controllers.PedalBoard.init();
+                    this.controller = PedalBoard.PedalBoard.init();
                     this.dom = {
                         pedals: this.$('#pedals')
                     }
@@ -74,27 +79,22 @@ define(
 
                 addPedal: function(e) {
                     var view, 
-                        model = new Pedals.PedalModel();
+                        params; 
 
                     if (e.target.id == 'add_compressor') {
-                        this.controller.addPedal('Compressor', model);
+                        params = new Models.CompressorModel();
 
                         view = new CompressorView({
-                            model: model
+                            model: params
                         }).init();
                     } else if (e.target.id == 'add_stereochorus') {
-                        this.controller.addPedal('StereoChorus', model);
+                        params = new Models.StereoChorusModel();
 
                         view = new StereoChorusView({
-                            model: model
-                        });
+                            model: params
+                        }).init();
                     }
-                    model.on('change:bypass', this.bypassPedal, this);
                     this.dom.pedals.append(view.$el);
-                },
-
-                bypassPedal: function(model) {
-                    this.controller.bypassPedal(model, model.get('bypass'));
                 },
 
                 playSample: function(e) {

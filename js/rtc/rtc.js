@@ -1,4 +1,4 @@
-define(['util', 'socket'], function(util, Socket) {
+define(['util', 'rtc/socket'], function(util, Socket) {
     NEW_CLIENT_ID = -1;
     /*
      * A peer connection.

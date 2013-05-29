@@ -14,15 +14,12 @@ requirejs.config({
 });
 
 
-require(['master', 'slave', 'syncmodel', 'peerui', 'jquery-1.9.1.min', 'pedals'], 
+require(['rtc/master', 'rtc/slave', 'rtc/syncmodel', 'peerui', 'jquery-1.9.1.min', 'audio/pedals'], 
         function(Master, Slave, Backbone, PeerUI, jQuery, Pedals) {
     var peer;
 
     window.Backbone = Backbone;
     window.Pedals = Pedals;
-
-    window.CM = new Pedals.CompressorModel();
-    window.CN = new Pedals.CompressorNode().init(window.CM);
 
     TestModel = Backbone.SyncModel.extend({
         name: 'TestModel'
@@ -64,7 +61,7 @@ require(['master', 'slave', 'syncmodel', 'peerui', 'jquery-1.9.1.min', 'pedals']
         Backbone.SyncRouter.init(peer);
 
         // Slave setup
-        Backbone.SyncRouter.on('model_new', function(data) {
+        Backbone.SyncRouter.on('model_sync', function(data) {
             console.log('New SyncModel init request', data);
             window.model = data.model;
             sliderView  = new TestView({
