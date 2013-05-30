@@ -134,12 +134,15 @@ define(['backbone', 'util'], function(Backbone, util) {
     },
     
     changeCallback = function changeCallback(eventName, target, opts) {
-        var uninteresting = ['request', 'sync', 'invalid', 'route'];
+        var uninteresting = ['request', 'sync', 'invalid', 'route'],
+            opts = util.extend({
+                    noBroadcast: false
+                }, opts);
 
         // Broadcast all interesting non-sync originating events
         if (eventName in uninteresting ||
             eventName.indexOf(':') >= 0 || 
-            opts.noBroadcast === true) {
+            opts.noBroadcast) {
             return;
         }
         console.log('Significant model event', eventName);
@@ -148,12 +151,14 @@ define(['backbone', 'util'], function(Backbone, util) {
                 SyncRouter.makeMsg(target)
             );
         } catch(e) {
-            console.error("Failed to send changes", e);
+            console.error("SyncRouter not initialized.", e);
         }
     };
 
     // A synchronizable model
     Backbone.SyncModel = Backbone.Model.extend({
+        // disable synching, for now anyway
+        sync: function(){},
         constructor: function() {
             Backbone.Model.apply(this, arguments);
             this.on('all', changeCallback);

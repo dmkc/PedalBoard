@@ -9,11 +9,12 @@ define(
 
                 init: function() {
                     this.model.on('change', this.modelChange, this);
+                    this.$('.remove').on('click', util.proxy(this.destroy,this));
                     return this;
                 },
 
                 events: {
-                    "change": "changeHandler"
+                    "change": "changeHandler",
                 },
 
                 changeHandler: function(e) {
@@ -26,6 +27,11 @@ define(
                         val = e.target.value;
 
                     this.model.set(e.target.className, val);
+                },
+
+                destroy: function() {
+                    this.$el.remove();
+                    this.model.destroy();
                 },
 
                 modelChange: function(model) {

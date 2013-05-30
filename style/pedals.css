@@ -1,0 +1,25 @@
+body {
+    font-family: Menlo, monospace;
+}
+
+#templates { 
+    display: none;
+}
+
+.pedal {
+    background: #eee;
+    padding: 1em;
+    border-radius: 1em;
+    margin: 0 0 1em 0;
+    position: relative;
+}
+
+.pedal label {
+    display: block;
+}
+
+.pedal .bypass {
+    position: absolute;
+    top: 1em;
+    right: 1em;
+}

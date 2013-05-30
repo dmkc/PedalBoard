@@ -60,15 +60,17 @@ define(
                     this.reconnectPedals();
                 }
                 model.on('change:bypass', this.bypassPedal, this);
+                model.on('destroy', this.removePedal, this);
             },
 
-            removePedal: function(index) {
-                return this.pedals.splice(index, 1);
+            removePedal: function(model) {
+                var index = this.getPedalIndex(model)+1
+                this.bypassPedal(model);
+                this.pedals.splice(index, 1);
             },
 
             // Reconnect all pedals according to their order in the
             // source list
-            // TODO: ignores bypassing
             reconnectPedals: function() {
                 var sources = this.getSources(),
                     curNode,
@@ -78,6 +80,7 @@ define(
 
                 for(var p=0; p<sources.length-1; p++) {
                     cur = sources[p];
+                    if (cur.model && cur.model.get('bypass')) continue;
                     // If this is the last pedal, route it into audiocontext
                     next = sources[p+1];
                     cur.output.disconnect();
@@ -85,9 +88,7 @@ define(
                 }
             },
 
-            // Disconnect pedal from node flow. 
-            // `model` can be either a reference to a pedal model, or an
-            // index into the pedal array
+            // Disconnect pedal from node chain.
             bypassPedal: function(model) {
                 var index =  this.getPedalIndex(model)+1,
                     bypass = model.get('bypass'),
@@ -123,8 +124,7 @@ define(
                 return sources;
             },
 
-            // Get index in the array based on pedal's model. Used by the main
-            // view which has no idea what pedals are
+            // Get index of pedal given pedal's model
             getPedalIndex: function(model) {
                 for(var p=0; p<this.pedals.length; p++) {
                     if(this.pedals[p].model === model) 
