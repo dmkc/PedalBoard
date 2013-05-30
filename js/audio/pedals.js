@@ -26,9 +26,9 @@ define(
     return {
         CompressorNode: util.inherit(PedalNode, {
             init: function(context, model) {
-                this.params = model;
+                this.model = model;
                 this.context = context;
-                this.params.on({
+                this.model.on({
                     'change': this.paramChange
                 }, this);
 
@@ -53,9 +53,9 @@ define(
 
         StereoChorusNode: util.inherit(PedalNode, {
             init: function(context, model) {
-                this.params = model;
+                this.model = model;
                 this.context = context;
-                this.params.on({
+                this.model.on({
                     'change': this.paramChange
                 }, this);
 

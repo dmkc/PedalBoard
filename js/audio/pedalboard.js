@@ -4,10 +4,6 @@
 define(
     ['buffer-loader', 'util', 'rtc/syncmodel', 'audio/pedals'], 
     function(BufferLoader, util, Backbone, Pedals) {
-        var PedalBoardModel = Backbone.SyncModel.extend({
-            name: 'PBModel'
-        });
-
         var PedalBoard = {
             init: function() {
                 // Fix up prefixing
@@ -63,6 +59,7 @@ define(
                     this.pedals.splice(index, 0, pedalNode);
                     this.reconnectPedals();
                 }
+                model.on('change:bypass', this.bypassPedal, this);
             },
 
             removePedal: function(index) {
@@ -71,6 +68,7 @@ define(
 
             // Reconnect all pedals according to their order in the
             // source list
+            // TODO: ignores bypassing
             reconnectPedals: function() {
                 var sources = this.getSources(),
                     curNode,
@@ -90,11 +88,9 @@ define(
             // Disconnect pedal from node flow. 
             // `model` can be either a reference to a pedal model, or an
             // index into the pedal array
-            bypassPedal: function(model, bypass) {
-                var index = (isNaN(new Number(index))) 
-                            ? this.getPedalIndex(model)+1
-                            : ++model,
-                    bypass = (bypass !== undefined) ? bypass : true,
+            bypassPedal: function(model) {
+                var index =  this.getPedalIndex(model)+1,
+                    bypass = model.get('bypass'),
                     sources = this.getSources(),
                     inNode = this.getPrev(index),
                     outNode = this.getNext(index)
@@ -102,10 +98,8 @@ define(
                 inNode.output.disconnect();
                 if(bypass) {
                     sources[index].output.disconnect();
-                    sources[index].bypass = true;
                     inNode.output.connect(outNode.input);
                 } else {
-                    sources[index].bypass = false;
                     inNode.output.connect(sources[index].input);
                     sources[index].output.connect(outNode.input);
                 }
@@ -121,12 +115,10 @@ define(
                 sources.push({
                     input:  this.masterGain,
                     output: this.masterGain,
-                    bypass: false
                 });
                 sources.unshift({
                     input: this.source,
                     output: this.source,
-                    bypass: false
                 });
                 return sources;
             },
@@ -144,7 +136,9 @@ define(
             // Get the next non-bypassed pedal
             getNext: function(index) {
                 var pedals = this.getSources();
-                while(pedals[index+1].bypass) index++;
+                while(pedals[index+1].model &&
+                      pedals[index+1].model.get('bypass')) 
+                    index++;
 
                 return pedals[index+1];
             },
@@ -152,7 +146,9 @@ define(
             // Get the previous non-bypassed pedal
             getPrev: function(index) {
                 var pedals = this.getSources();
-                while(pedals[index-1].bypass) index--;
+                while(pedals[index-1].model &&
+                      pedals[index-1].model.get('bypass')) 
+                    index--;
 
                 return pedals[index-1];
             },
