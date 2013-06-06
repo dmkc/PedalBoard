@@ -21,7 +21,7 @@ require(['rtc/master', 'rtc/slave', 'rtc/syncmodel', 'peerui', 'jquery-1.9.1.min
     window.Backbone = Backbone;
     window.Pedals = Pedals;
 
-    TestModel = Backbone.SyncModel.extend({
+    var TestModel = Backbone.SyncModel.extend({
         name: 'TestModel'
     });
 
@@ -73,9 +73,14 @@ require(['rtc/master', 'rtc/slave', 'rtc/syncmodel', 'peerui', 'jquery-1.9.1.min
 
         // Master setup
         if(master) {
-            model = new TestModel();
+            model = new TestModel()
+            llist = new Backbone.SyncLList({id:'_views'})
+            // Test out linked list
+            llist.add(model)
+            llist.add(new TestModel())
+
             model.set('slider', 1);
-            Backbone.SyncRouter.on('connection_state', function(e){
+            Backbone.SyncRouter.on('data_channel_state', function(e){
                 console.log("New peer connection");
 
                 if (e.state == 'open') {

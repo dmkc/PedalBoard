@@ -67,11 +67,11 @@ define(
                 dom: {},
                 // TODO: switch to touch/tap events with zepto
                 events: {
-                    'click #add_compressor' : 'addPedal',
+                    'click #add_compressor'   : 'addPedal',
                     'click #add_stereochorus' : 'addPedal',
-                    'click #play_sample_0'  : 'playSample',
-                    'click #live_input'     : 'liveInput',
-                    'click #stop_input'     : 'stopInput'
+                    'click #play_sample_0'    : 'playSample',
+                    'click #live_input'       : 'liveInput',
+                    'click #stop_input'       : 'stopInput'
                 },
 
                 init: function() {

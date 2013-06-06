@@ -85,7 +85,7 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
 
 
             // TODO: Clean up disconnected connections in Master
-            connection.cnxn.addEventListener('icechange', function(e){
+            connection.cnxn.addEventListener('iceconnectionstatechange', function(e){
                 console.log('Peer: ICE state change:', e, 
                             'connection:', this.iceConnectionState,
                             'gathering:', this.iceGatheringState);
@@ -106,6 +106,9 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
             connection.makeOffer();
             return connection;
         },
+
+        // Send welcome connection package. Only Master implements this.
+        welcome: function(){},
 
         // TODO: a nicer way to bubble the event up
         // TODO: ignore all messages outside of this session ID
@@ -129,7 +132,7 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
 
         dataChannelStateCallback: function(connection) {
             var state = connection.dataChannel.readyState;
-            this.trigger('connection_state', {
+            this.trigger('data_channel_state', {
                 state: state,
                 client_id: connection.client_id
             });

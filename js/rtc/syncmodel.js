@@ -44,14 +44,20 @@ define(['backbone', 'util'], function(Backbone, util) {
     SyncRouter = {
         // Map model names to class names for re-instantiation on other clients
         modelMap: {},
+        rootModel: null,
 
         init: function(peer) {
             if(!peer) throw "SyncRouter needs to be initiated with a Peer node"
+                //
+            // RootModel is where we store references to all collectons
+            this.rootModel = new RootModel({id: '_root'})
+
             this.peer = peer;
             this.peer.on('datachannel', 
                          util.proxy(this.dataChannelCallback, this)
                         );
-            this.peer.on('connection_state', util.proxy(this.dataChannelState, this));
+            this.peer.on('data_channel_state', util.proxy(this.dataChannelState, this));
+            Backbone.SyncLList.init()
         },
 
         makeMsg: function(model, type) {
@@ -84,9 +90,12 @@ define(['backbone', 'util'], function(Backbone, util) {
                         noBroadcast: true
                     });
 
+                    model.trigger('sync', model)
+                    /*
                     this.peer.sendToAll(
                         this.makeMsg(model), 
                         e.client_id);
+                        */
 
                 // Model not yet present in the pool
                 } else {
@@ -127,8 +136,13 @@ define(['backbone', 'util'], function(Backbone, util) {
         },
 
         dataChannelState: function(e) {
-            // pass through connection state changes
-            this.trigger('connection_state', e);
+            if (e.state == 'open') {
+                this.peer.welcome(
+                    SyncRouter.makeMsg(SyncRouter.rootModel, 'sync_full')
+                )
+            }
+            // Pass through connection state changes
+            //this.trigger('connection_state', e);
         },
         
     },
@@ -140,7 +154,7 @@ define(['backbone', 'util'], function(Backbone, util) {
                 }, opts);
 
         // Broadcast all interesting non-sync originating events
-        if (eventName in uninteresting ||
+        if (uninteresting.indexOf(eventName) > -1 ||
             eventName.indexOf(':') >= 0 || 
             opts.noBroadcast) {
             return;
@@ -151,15 +165,24 @@ define(['backbone', 'util'], function(Backbone, util) {
                 SyncRouter.makeMsg(target)
             );
         } catch(e) {
-            console.error("SyncRouter not initialized.", e);
+            console.error("SyncRouter: not initialized.", e);
         }
-    };
+    },
 
     // A synchronizable model
-    Backbone.SyncModel = Backbone.Model.extend({
-        // disable synching, for now anyway
-        sync: function(){},
+    SyncModel = Backbone.Model.extend({
+        sync: function(){
+            // Request update to next
+            //this._next = null
+            SyncRouter.peer.sendToAll(
+                SyncRouter.makeMsg(this, 'sync_request')
+            )
+        },
+
         constructor: function() {
+            // Used for collections
+            this._next = this._prev = null;
+
             Backbone.Model.apply(this, arguments);
             this.on('all', changeCallback);
 
@@ -170,19 +193,153 @@ define(['backbone', 'util'], function(Backbone, util) {
                 this.id = this.cid;
 
             ModelPool.add(this);
-        }
+        },
+
+        // Linked list methods
+        _nextNode: function(next){
+            var nextNode
+
+            if(next !== undefined) {
+                this.set('_next', {
+                    name: next.name,
+                    id: next.id
+                });
+                this._next = next;
+            } else {
+                nextNode = this.get('_next')
+                // Update reference to the next model in the collection
+                if(nextNode && this._next == null) {
+                    this._next = ModelPool.get(nextNode.name, nextNode.id)
+                }
+                return this._next;
+            }
+        },
+
+        _prevNode: function(prev){
+            var prevNode
+
+            if(prev !== undefined) {
+                this.set('_prev', {
+                    name: prev.name,
+                    id: prev.id
+                });
+                this._prev = prev;
+            } else {
+                prevNode = this.get('_prev')
+                // Update reference to the previous model in the collection
+                if(prevNode && this._prev == null) {
+                    this._prev = ModelPool.get(prevNode.name, prevNode.id)
+                }
+                return this._prev;
+            }
+        },
+
 
     });
 
     // Override extending to keep track of name to model mapping, which we'll
     // need to instantiate models on other peers
-    Backbone.SyncModel.extend = function(obj) {
+    SyncModel.extend = function(obj) {
         if (!obj.name) throw "A SyncModel must have a name";
         var result = Backbone.Model.extend.apply(this, arguments);
         SyncRouter.modelMap[obj.name] = result;
         result.name = obj.name;
         return result;
     }
+
+    SyncModel.request = function(name, model_id) {
+        var model = ModelPool.get(name, model_id)
+        if (!model) {
+            model = new SyncRouter.modelMap[name]({id: model_id})
+        }
+        return model
+    }
+
+    // A synchronized linked list
+    // TODO: comments
+    // TODO: support for 'remove', 'add' events.
+    SyncLList = SyncModel.extend({
+        name: 'SyncLList',
+
+        constructor: function(obj) {
+            SyncModel.apply(this, arguments);
+
+            if(arguments[0] !== undefined &&
+               arguments[0].id !== undefined)
+                this.id = arguments[0].id;
+            else
+                this.id = this.cid;
+
+            var cols = SyncRouter.rootModel.get('_collections').splice(0)
+            if (!(this.id in cols)) {
+                cols.push(this.id)
+                SyncRouter.rootModel.set('_collections', cols)
+            }
+        },
+
+        // Add a model to collection's linked list
+        add: function(model) {
+            var tail = this.tail || this
+
+            if (model.get('_next') || model.get('_prev')) {
+                console.error("SyncLList: This model is already in a collection")
+                return
+            }
+
+            tail._nextNode(model)
+            model._prevNode(this)
+            this.tail = model
+            this.trigger('add', model)
+            return model
+        },
+
+        // Remove a model from collection's linked list
+        remove: function(model) {
+            var cur = this._nextNode(), prev, next
+            while(cur !== model) cur = cur._nextNode()
+            if (cur === null) return null
+
+            prev = cur._prevNode()
+            next = cur._nextNode()
+            prev._nextNode(next)
+            next._prevNode(prev)
+
+            this.trigger('remove', model)
+            return model
+        },
+
+        // Recursively sync this list by syncing every model in the list
+        sync: function() {
+            var linkedList = this
+
+            this.once('sync', function listSyncHandler() {
+                var next = this.get('_next'),
+                    nextNode
+
+                // Reached end of linked list
+                if (!next) {
+                    console.log("SyncLList: sync reached end of list", this)
+                    linkedList.trigger('sync', this)
+                    return
+                }
+
+                nextNode = SyncModel.request(next.name, next.id)
+                nextNode.once('sync', listSyncHandler)
+                this._next = nextNode
+                nextNode.sync()
+            })
+            SyncModel.prototype.sync.apply(this,arguments)
+        },
+    });
+
+    SyncLList.init = function() {
+        SyncRouter.rootModel.set('_collections', []) 
+    };
+
+    // A magic model that keeps track of all collections in the swarm
+    var RootModel = SyncModel.extend({
+        name: 'RootModel'
+    });
 
 
     // Mix in bb events
@@ -191,6 +348,9 @@ define(['backbone', 'util'], function(Backbone, util) {
 
     Backbone.SyncRouter = SyncRouter;
     Backbone.ModelPool = ModelPool;
+
+    Backbone.SyncModel = SyncModel
+    Backbone.SyncLList = SyncLList
 
     return Backbone;
 });

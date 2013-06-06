@@ -5,11 +5,18 @@ define(['util', 'rtc/peer', 'rtc/socket'], function(util, Peer, Socket) {
     }
 
     Master.prototype = Object.create(util.extend({}, Peer.prototype, {
+        // Stupid, but seemingly necessary for some basic security
+        master: true,
+
         announce: function(){
             Socket.sendMessage({
                 type: "announce_master",
                 client_id: this.client_id
             });
+        },
+
+        welcome: function(msg){
+            this.sendToAll(msg); 
         },
 
         processMessage: function(message) {
@@ -58,7 +65,9 @@ define(['util', 'rtc/peer', 'rtc/socket'], function(util, Peer, Socket) {
                     cnxn.close();
                 } 
             }
-        }
+        },
+
+
     }));
 
     return Master;

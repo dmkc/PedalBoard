@@ -52,15 +52,6 @@ define(['util', 'rtc/socket'], function(util, Socket) {
             cnxn.addEventListener('datachannel', 
                 util.proxy(this.newDataChannelCallback, this));
 
-
-            cnxn.onstatechange = function(e){
-                console.log('RTC: Connection state change:', 
-                    cnxn.readyState,
-                    e);
-            };
-
-          
-
             return cnxn;
         },
 
