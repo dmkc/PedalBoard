@@ -153,11 +153,8 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
             }
 
             connection.makeOffer()
-            return connection;
+            return connection
         },
-
-        // Send welcome connection package. Only Master implements this.
-        welcome: function(){},
 
         // Parse raw data channel message into JSON, then notify
         // all subscribers of new message

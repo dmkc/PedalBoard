@@ -87,6 +87,11 @@ define(['backbone', 'util'], function(Backbone, util) {
 
                 // Model already in the pool
                 if(model != null) {
+                    // Only master can broadcast its collection list
+                    if(msg.type == 'sync_full' && msg.body.id == '_root' && 
+                       this.peer.master)
+                        return
+
                     model.set(msg.body.data, {
                         noBroadcast: true
                     });
@@ -134,11 +139,10 @@ define(['backbone', 'util'], function(Backbone, util) {
         },
 
         dataChannelState: function(e) {
-            // New data channel connection. Exchange root model dumps to let
-            // the remote peer know which collections are available. Only the Master
-            // node implements sending the welcome.
-            if (e.state == 'open') {
-                this.peer.welcome(
+            // If this is a master node, send own root model to all the 
+            // connected slaves.
+            if (e.state == 'open' && this.peer.master) {
+                this.peer.sendToAll(
                     SyncRouter.makeMsg(SyncRouter.rootModel, 'sync_full')
                 )
             }

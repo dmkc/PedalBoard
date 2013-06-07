@@ -29,7 +29,7 @@ require(['rtc/master', 'rtc/slave', 'rtc/syncmodel', 'peerui', 'jquery-1.9.1.min
 
     function startTest(master) {
         peer =  (master) ? new Master() : new Slave();
-        //PeerUI.init(peer);
+        PeerUI.init(peer);
 
         Backbone.SyncRouter.on('init', function() {
             console.log("Sync router initialized")

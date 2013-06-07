@@ -15,10 +15,6 @@ define(['util', 'rtc/peer', 'rtc/socket'], function(util, Peer, Socket) {
             });
         },
 
-        welcome: function(msg){
-            this.sendToAll(msg); 
-        },
-
         processMessage: function(message) {
             var msg = JSON.parse(message.data),
                 cnxn;
