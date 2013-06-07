@@ -36,7 +36,8 @@ require(['rtc/master', 'rtc/slave', 'rtc/syncmodel', 'peerui', 'jquery-1.9.1.min
             window.PedalBoardView = new Views.PedalBoardView().init();
 
             if(master) {
-                llist = new Backbone.SyncLList({id:'_views'})
+                new Backbone.SyncLList({id:'_slotViews'})
+                new Backbone.SyncLList({id:'_models'})
             }
         })
 

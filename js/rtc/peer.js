@@ -1,13 +1,15 @@
 /*
  * Maintain a pool of WebRTC connections and their respective data channels.
  * Allows broadcasting messages to data channels of all connected peers, and
- * to connections with specific client ID's.
+ * to connections with specific client ID's. Extended by Master and Slave
+ * prototypes.
  *
  * EVENTS
- * * data_channel_state -- a change in the state of the data channel. The 
+ * - data_channel_state -- a change in the state of the data channel. The 
  * first argument to the callback is an object with 'state' and 'client_id'
  * set to current and connection ID of the parent data channel
- * * data_channel_message -- a new message on a data channel.
+ *
+ * - data_channel_message -- a new message on one of the peer data channels.
  */
 define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'], 
        function(util, RTCConnection, Socket, _, Backbone) {
@@ -125,7 +127,7 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
                 }
             });
 
-            // Handle raw data channel events by passing on data channel
+            // Handle raw data channel events by passing through 
             // state changes and parsing JSON on new channel messages
             connection.on('data_channel_ready', function() {
                 console.log('Peer: data channel is ready')
@@ -136,10 +138,14 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
                     })
 
                 this.dataChannel.addEventListener('open', 
-                    _.bind(that.dataChannelState, connection))
+                    function(){
+                        that.dataChannelState(connection)
+                    })
 
                 this.dataChannel.addEventListener('close', 
-                    _.bind(that.dataChannelState, connection))
+                    function(){
+                        that.dataChannelState(connection)
+                    })
             })
 
             if(dataChannel) {
@@ -175,14 +181,13 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
             this.trigger('data_channel_message', msg);
         },
 
-        // Data channel becomes open or closed. This executes in the context
-        // of an RTCConnection to make pulling out client_id easier.
-        dataChannelState: function() {
+        // Data channel becomes open or closed. 
+        dataChannelState: function(connection) {
             console.log("Peer: Data channel state change for client_id:",
-                       this.client_id)
+                       connection.client_id)
             this.trigger('data_channel_state', {
-                state: this.dataChannel.readyState,
-                client_id: this.client_id
+                state: connection.dataChannel.readyState,
+                client_id: connection.client_id
             });
 
         },
