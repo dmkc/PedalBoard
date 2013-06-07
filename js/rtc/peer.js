@@ -1,5 +1,13 @@
 /*
- * Common functionality for both masters and slaves
+ * Maintain a pool of WebRTC connections and their respective data channels.
+ * Allows broadcasting messages to data channels of all connected peers, and
+ * to connections with specific client ID's.
+ *
+ * EVENTS
+ * * data_channel_state -- a change in the state of the data channel. The 
+ * first argument to the callback is an object with 'state' and 'client_id'
+ * set to current and connection ID of the parent data channel
+ * * data_channel_message -- a new message on a data channel.
  */
 define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'], 
        function(util, RTCConnection, Socket, _, Backbone) {
@@ -94,11 +102,9 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
 
         // Create a new RTC connection for given client_id.
         newConnection: function(client_id, local_id, dataChannel) {
-            var dc = dataChannel || false,
-                connection = new RTCConnection(client_id, local_id).init(
-                    this.socket,
-                    { dataChannel: dc }),
-                that = this;
+            var that = this,
+                connection = new RTCConnection(client_id, local_id) .init(
+                                this.socket, dataChannel)
 
             // TODO: Clean up disconnected connections in Master
             // Try to reestablish connection if it dies
@@ -120,8 +126,12 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
             // Handle raw data channel events by passing on data channel
             // state changes and parsing JSON on new channel messages
             connection.on('data_channel_ready', function() {
+                console.log('Peer: data channel is ready')
                 this.dataChannel.addEventListener('message', 
-                    _.bind(that.dataChannelMessage, that))
+                    function(message){
+                        message.client_id = connection.client_id
+                        that.dataChannelMessage(message)
+                    })
 
                 this.dataChannel.addEventListener('open', 
                     _.bind(that.dataChannelState, connection))
@@ -129,6 +139,10 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
                 this.dataChannel.addEventListener('close', 
                     _.bind(that.dataChannelState, connection))
             })
+
+            if(dataChannel) {
+                connection.trigger('data_channel_ready')
+            }
 
             connection.makeOffer()
             return connection;
@@ -139,24 +153,24 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
 
         // Parse raw data channel message into JSON, then notify
         // all subscribers of new message
-        dataChannelMessage: function(event) {
+        dataChannelMessage: function(msg) {
         // TODO: ignore all messages outside of this session ID
             console.log('Peer: New data channel message')
             var json;
-            if(!event.data) {
+            if(!msg.data) {
                 console.error("PEER:Empty data channel message");
                 return
             }
 
             try {
-                json = JSON.parse(event.data);
+                json = JSON.parse(msg.data);
             } catch(e) {
                 console.error("PEER: Couldn't parse JSON for message");
                 return
             }
 
-            event.dataParsed = json;
-            this.trigger('data_channel_message', event);
+            msg.dataParsed = json;
+            this.trigger('data_channel_message', msg);
         },
 
         // Data channel becomes open or closed. This executes in the context

@@ -98,8 +98,9 @@ define(['backbone', 'util'], function(Backbone, util) {
                     if(this.modelMap[msg.body.name] === undefined) {
                         throw "Unknown model: " + msg.body.name;
                     }
+                    _.extend(msg.body.data, {id:msg.body.id})
+
                     model = new this.modelMap[msg.body.name](msg.body.data);
-                    model.id = msg.body.id;
 
                     // Request the rest of the model if this wasn't a full dump
                     if(msg.type != 'sync_full') {

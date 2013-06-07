@@ -1,9 +1,9 @@
 /*
+ * A wrapper around WebRTCConnection that handles the actual RTC handshake.
  *
  * EVENTS
- * - data_channel_ready : data channel has been initialized and can be listened
- * to for `open` and `close` events as per spect
- * - 
+ * data_channel_ready : data channel has been initialized and can be listened
+ * to for `open` and `close` events as per spec. 
  */
 define(['util', 'rtc/socket', 'underscore', 'backbone'], 
        function(util, Socket, _, Backbone) {
@@ -22,46 +22,39 @@ define(['util', 'rtc/socket', 'underscore', 'backbone'],
 
     RTCConnection.prototype = Object.create({
         // Init. Will need the socket to exchange offers, answers and ICE candidates
-        init: function(socket,opts) {
+        init: function(socket, dataChannel) {
+            var cnxn
+
             this.socket = socket
             // TODO: handle reconnection  elsewhere
             if(!this.cnxn || this.cnxn.iceConnectionState === 'disconnected') {
                 this.close()
-                this.initConnection(opts.dataChannel)
+                
+                this.cnxn = new webkitRTCPeerConnection(
+                    null,
+                    {optional: [{RtpDataChannels: true}]}
+                );
+                cnxn = this.cnxn;
+
+                // This connection is an offer. Create a new data channel
+                // Otherwise, a data channel has already been established.
+                try {
+                    if(dataChannel) {
+                        this.dataChannel = this.cnxn.createDataChannel(
+                            "channel-"+(Math.random()*1000).toFixed(0),
+                            {reliable: false}
+                        );
+                    }
+                } catch (e) {
+                    console.error('RTC: Creating data channel failed', e);
+                }
+                cnxn.addEventListener('icecandidate', 
+                    util.proxy(this.onIceCandidate, this));
+                cnxn.addEventListener('datachannel', 
+                    util.proxy(this.newDataChannelCallback, this));
             }
 
             return this;
-        },
-
-        initConnection : function(dataChannel) {
-            var servers = null,
-                cnxn;
-            
-            this.cnxn = new webkitRTCPeerConnection(
-                servers,
-                {optional: [{RtpDataChannels: true}]}
-            );
-            cnxn = this.cnxn;
-
-            // This connection is an offer. Create a new data channel
-            // Otherwise, a data channel has already been established.
-            try {
-                if(dataChannel) {
-                    this.dataChannel = this.cnxn.createDataChannel(
-                        "channel-"+(Math.random()*1000).toFixed(0),
-                        {reliable: false}
-                    );
-                    this.trigger('data_channel_ready', this)
-                }
-            } catch (e) {
-                console.error('RTC: Creating data channel failed', e);
-            }
-            cnxn.addEventListener('icecandidate', 
-                util.proxy(this.onIceCandidate, this));
-            cnxn.addEventListener('datachannel', 
-                util.proxy(this.newDataChannelCallback, this));
-
-            return cnxn;
         },
 
         //
@@ -98,7 +91,7 @@ define(['util', 'rtc/socket', 'underscore', 'backbone'],
 
         // Send data via connection's data channel. 
         sendData: function(data) {
-          this.dataChannel.send(data);
+            this.dataChannel.send(data);
         },
 
         close: function() {
