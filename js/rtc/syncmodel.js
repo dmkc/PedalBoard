@@ -54,7 +54,7 @@ define(['backbone', 'util'], function(Backbone, util) {
             this.rootModel.set('_collections', [], {noBroadcast: true}) 
 
             this.peer = peer;
-            this.peer.on('datachannel', 
+            this.peer.on('data_channel_message', 
                          util.proxy(this.dataChannelCallback, this)
                         );
             this.peer.on('data_channel_state', util.proxy(this.dataChannelState, this));
@@ -92,11 +92,6 @@ define(['backbone', 'util'], function(Backbone, util) {
                     });
 
                     model.trigger('sync', model)
-                    /*
-                    this.peer.sendToAll(
-                        this.makeMsg(model), 
-                        e.client_id);
-                        */
 
                 // Model not yet present in the pool
                 } else {
@@ -125,6 +120,7 @@ define(['backbone', 'util'], function(Backbone, util) {
 
                 // Model already in the pool
                 if(model == null) {
+                    // TODO: add response type for failed model requests
                     console.error('BB: Request to sync a missing model', msg);
                     return
                 }
@@ -137,8 +133,9 @@ define(['backbone', 'util'], function(Backbone, util) {
         },
 
         dataChannelState: function(e) {
-            // Exchange root nodes on a fresh data channel connection. This
-            // lets the other peer know what collections are available.
+            // New data channel connection. Exchange root model dumps to let
+            // the remote peer know which collections are available. Only the Master
+            // node implements sending the welcome.
             if (e.state == 'open') {
                 this.peer.welcome(
                     SyncRouter.makeMsg(SyncRouter.rootModel, 'sync_full')

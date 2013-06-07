@@ -6,11 +6,13 @@ define(['util', 'rtc/peer', 'rtc/socket'], function(util, Peer, Socket) {
 
     Slave.prototype = Object.create(util.extend({}, Peer.prototype, {
         announce: function(){
-            Socket.sendMessage({
+            this.sendSocketMessage({
                 type: "announce_slave",
                 client_id: this.client_id
             });
         },
+
+        // Figure 
         processMessage: function(message) {
             var msg = JSON.parse(message.data),
                 cnxn;
@@ -30,19 +32,7 @@ define(['util', 'rtc/peer', 'rtc/socket'], function(util, Peer, Socket) {
                 cnxn = this.lastConnection();
 
                 // Respond to master with an offer, unless we're already connected
-                if (msg.type == 'announce_master' && 
-                    (cnxn == null || !cnxn.getStatus())) {
-                    /*
-                     * The following shouldn't ever be a case since master will 
-                     * queue up offers.
-                    // May happen when we responded to a last announce but
-                    // did not get connected
-                    if (cnxn != null && !cnxn.getStatus()) {
-                        cnxn.close();
-                        this.removeLastConnection();
-                    }
-                    */
-
+                if (msg.type == 'announce_master' && cnxn == null) {
                     cnxn = this.newConnection(msg.client_id, true);
 
                     this.addConnection(cnxn);
@@ -51,7 +41,7 @@ define(['util', 'rtc/peer', 'rtc/socket'], function(util, Peer, Socket) {
                 } else if (msg.type === 'offer') {
                     if (cnxn == null) {
                         var cnxn = this.newConnection(msg.client_id, false);
-                        cnxn.server_id = this.client_id;
+                        cnxn.local_id = this.client_id;
                         this.addConnection(cnxn);
                     } 
 

@@ -1,36 +1,22 @@
+/*
+ * Common functionality for both masters and slaves
+ */
 define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'], 
-       function(util, RTCConnection, Socket,  _, Backbone) {
+       function(util, RTCConnection, Socket, _, Backbone) {
     // Magic number for an unregistered client
     NEW_CLIENT_ID = -1;
 
     function Peer() {
         var registered = this.registered = false,
             client_id = this.client_id = NEW_CLIENT_ID,
-            socket = this.socket,
             connections = this.connections = [],
-            master = this.master,
             that = this;
 
-        // TODO: move to constructor
-        socket = Socket.initSocket();
-        socket.addEventListener('message', util.proxy(this.processMessage, this));
-
-        socket.addEventListener('close',  function() {
-            console.log('Peer: WebSocket closed');
-            that.registered = false;
-
-            setTimeout(function(){
-                socket = null;
-                console.log("Peer: Attempting to reconnect WebSocket");
-                socket = Socket.initSocket();
-            }, 1500);
-        });
-
-        socket.addEventListener('open', function() {
-            that.register();
-            that.announce();
-        });
-
+            this.initSocket()
+            this.socket.addEventListener('open', function() {
+                that.register();
+                that.announce();
+            });
 
     }
 
@@ -38,16 +24,47 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
         _.extend({
         // Handle WebSocket messages
         processMessage: function(message) {
-            throw 'Not implemented';
+            throw 'Not implemented'
         },
 
+        // Set up WebSocket for RTC handshake
+        initSocket: function() {
+            this.socket = new WebSocket('ws://'+window.location.hostname+':1337/')
+            this.socket.addEventListener(
+                'message', 
+                 _.bind(this.processMessage, this))
+
+            // Keep trying to re-connect to websocket server if connection closes
+            this.socket.addEventListener('close',  _.bind(function() {
+                    console.log('Peer: WebSocket closed, attempting to reconnect');
+                    this.registered = false;
+
+                    setTimeout(
+                        _.bind(this.initSocket, this), 
+                        1500)
+                }, this));
+
+
+        },
+
+        // Register with the server. The server will return a client_id, 
+        // unless we already have one in case of a reconnect
         register: function() {
-            Socket.sendMessage({
+            this.sendSocketMessage({
                 type: "register",
                 client_id: this.client_id
             });
         },
 
+        // WebSockets are used to exchange control messages about the session,
+        // as well as the WebRTC handshake messages
+        sendSocketMessage: function sendMessage(message) {
+            var msgString = JSON.stringify(message);
+            //console.log("TO WSS:", msgString);
+            this.socket.send(msgString);
+        },
+
+        // Send message to all current WebRTC connections
         sendToAll: function(msg, except) {
             console.log('PEERS: Sending msg to all peers', msg);
 
@@ -61,6 +78,7 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
             });
         },
 
+        // Send message to a connection with given client_id
         sendTo: function(client_id, msg) {
             console.log('PEERS: Sending msg to client', client_id, msg);
             var cnxn;
@@ -74,25 +92,24 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
             };
         },
 
-
-        // Start a new connection making an offer.
-        newConnection: function(client_id, dataChannel) {
+        // Create a new RTC connection for given client_id.
+        newConnection: function(client_id, local_id, dataChannel) {
             var dc = dataChannel || false,
-                connection = new RTCConnection(client_id).init({
-                           dataChannel: dc
-                       }),
+                connection = new RTCConnection(client_id, local_id).init(
+                    this.socket,
+                    { dataChannel: dc }),
                 that = this;
 
-
             // TODO: Clean up disconnected connections in Master
+            // Try to reestablish connection if it dies
             connection.cnxn.addEventListener('iceconnectionstatechange', function(e){
-                console.log('Peer: ICE state change:', e, 
+                console.log('PEER: ICE state change:', e, 
                             'connection:', this.iceConnectionState,
                             'gathering:', this.iceGatheringState);
 
+                // The connection has died. Close the data channel.
                 if (this.iceConnectionState == 'disconnected') {
                     connection.dataChannel.close();
-                    that.dataChannelStateCallback(connection);
                     console.log('Peer: ICE disconnect. Removing connection:', connection);
                     setTimeout(function(){
                         that.removeConnection(connection);
@@ -100,19 +117,31 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
                 }
             });
 
-            connection.ondatachannel = util.proxy(this.dataChannelCallback, this);
-            connection.dataChannelStateCallback = util.proxy(this.dataChannelStateCallback, this);
+            // Handle raw data channel events by passing on data channel
+            // state changes and parsing JSON on new channel messages
+            connection.on('data_channel_ready', function() {
+                this.dataChannel.addEventListener('message', 
+                    _.bind(that.dataChannelMessage, that))
 
-            connection.makeOffer();
+                this.dataChannel.addEventListener('open', 
+                    _.bind(that.dataChannelState, connection))
+
+                this.dataChannel.addEventListener('close', 
+                    _.bind(that.dataChannelState, connection))
+            })
+
+            connection.makeOffer()
             return connection;
         },
 
         // Send welcome connection package. Only Master implements this.
         welcome: function(){},
 
-        // TODO: a nicer way to bubble the event up
+        // Parse raw data channel message into JSON, then notify
+        // all subscribers of new message
+        dataChannelMessage: function(event) {
         // TODO: ignore all messages outside of this session ID
-        dataChannelCallback: function(event) {
+            console.log('Peer: New data channel message')
             var json;
             if(!event.data) {
                 console.error("PEER:Empty data channel message");
@@ -122,24 +151,29 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
             try {
                 json = JSON.parse(event.data);
             } catch(e) {
-                console.error("PEER: Couldn't parse message JSON");
+                console.error("PEER: Couldn't parse JSON for message");
                 return
             }
 
             event.dataParsed = json;
-            this.trigger('datachannel', event);
+            this.trigger('data_channel_message', event);
         },
 
-        dataChannelStateCallback: function(connection) {
-            var state = connection.dataChannel.readyState;
+        // Data channel becomes open or closed. This executes in the context
+        // of an RTCConnection to make pulling out client_id easier.
+        dataChannelState: function() {
+            console.log("Peer: Data channel state change for client_id:",
+                       this.client_id)
             this.trigger('data_channel_state', {
-                state: state,
-                client_id: connection.client_id
+                state: this.dataChannel.readyState,
+                client_id: this.client_id
             });
 
         },
 
-        // Connection list 
+        //
+        // CONNECTION LIST 
+        //
         addConnection: function(connection) {
             this.connections.push(connection);
         },

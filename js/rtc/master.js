@@ -9,7 +9,7 @@ define(['util', 'rtc/peer', 'rtc/socket'], function(util, Peer, Socket) {
         master: true,
 
         announce: function(){
-            Socket.sendMessage({
+            this.sendSocketMessage({
                 type: "announce_master",
                 client_id: this.client_id
             });
@@ -39,22 +39,24 @@ define(['util', 'rtc/peer', 'rtc/socket'], function(util, Peer, Socket) {
 
                 if (msg.type === 'offer') {
                     if (cnxn == null) {
-                        var cnxn = this.newConnection(msg.client_id, false);
-                        cnxn.server_id = this.client_id;
+                        var cnxn = this.newConnection(msg.client_id, this.client_id, false);
                         this.addConnection(cnxn);
                     } 
+                    // Respond to offers even if already established connection
                     cnxn.respondToOffer(msg);
                     console.log('Master: Responding to new offer:', msg);
 
-                // TODO: accept announce_master connections as well for more
-                // complex topologies
+                // A new slave connected to the swarm
                 } else if (msg.type == 'announce_slave') {
-                    var cnxn = this.newConnection(msg.client_id, true);
-                    cnxn.server_id = this.client_id;
+                    cnxn = cnxn || this.newConnection(msg.client_id, this.client_id, true)
                     this.addConnection(cnxn);
                     
+                //
                 } else if (msg.type == 'answer') {
                     console.log("Master: Received answer from a peer");
+                    // Configure connection with session info from the response
+                    // ICE candidates should now begin to be sent by
+                    // the browser
                     cnxn.answer(msg);
 
                 } else if (msg.type === 'candidate') {

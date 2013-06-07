@@ -34,8 +34,9 @@ function assignClientID(msg, connection) {
         connection.client_id = connectionCount;
         connectionCount++;
     } else {
+        // XXX: Can connect multiple clients with same ID
         connection.client_id = msg.client_id;
-        // Edge case of server going down and client re-registering with
+        // The case of server going down and client re-registering with
         // existing client_id
         if (connectionCount < msg.client_id) {
             connectionCount = msg.client_id;

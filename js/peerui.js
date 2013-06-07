@@ -6,7 +6,7 @@ define(['backbone', 'util'], function(Backbone, util) {
         init: function(peer) {
             if(!peer) throw "EventRouter needs to be initiated with a Peer node"
             this.peer = peer;
-            this.peer.on('datachannel', util.proxy(this.handleMessage, this));
+            this.peer.on('data_channel_message', util.proxy(this.handleMessage, this));
 
             console.log("PEERUI: Init with peer", peer);
         },

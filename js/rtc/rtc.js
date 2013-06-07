@@ -1,48 +1,57 @@
-define(['util', 'rtc/socket'], function(util, Socket) {
+/*
+ *
+ * EVENTS
+ * - data_channel_ready : data channel has been initialized and can be listened
+ * to for `open` and `close` events as per spect
+ * - 
+ */
+define(['util', 'rtc/socket', 'underscore', 'backbone'], 
+       function(util, Socket, _, Backbone) {
     NEW_CLIENT_ID = -1;
     /*
      * A peer connection.
      *
      * Basically wrapper around RTCPeerConnection over WebSockets
      */
-    function RTCConnection(client_id) {
+    function RTCConnection(client_id, local_id) {
         this.client_id = client_id || NEW_CLIENT_ID;
-        this.server_id = NEW_CLIENT_ID;
+        this.local_id = local_id || NEW_CLIENT_ID;
         this.cnxn
         this.dataChannel
-        this.started = false;
     }
 
     RTCConnection.prototype = Object.create({
-        init: function(opts) {
+        // Init. Will need the socket to exchange offers, answers and ICE candidates
+        init: function(socket,opts) {
+            this.socket = socket
             // TODO: handle reconnection  elsewhere
             if(!this.cnxn || this.cnxn.iceConnectionState === 'disconnected') {
-                this.close();
-                this.createConnection(opts.dataChannel);
+                this.close()
+                this.initConnection(opts.dataChannel)
             }
 
             return this;
         },
 
-        createConnection : function(dataChannel) {
+        initConnection : function(dataChannel) {
             var servers = null,
                 cnxn;
             
-            this.started = true;
             this.cnxn = new webkitRTCPeerConnection(
                 servers,
                 {optional: [{RtpDataChannels: true}]}
             );
             cnxn = this.cnxn;
 
+            // This connection is an offer. Create a new data channel
+            // Otherwise, a data channel has already been established.
             try {
                 if(dataChannel) {
                     this.dataChannel = this.cnxn.createDataChannel(
                         "channel-"+(Math.random()*1000).toFixed(0),
                         {reliable: false}
                     );
-                    this.dataChannel.onopen = util.proxy(this.onDataChannelStateChange, this);
-                    this.dataChannel.onclose = util.proxy(this.onDataChannelStateChange, this);
+                    this.trigger('data_channel_ready', this)
                 }
             } catch (e) {
                 console.error('RTC: Creating data channel failed', e);
@@ -55,6 +64,9 @@ define(['util', 'rtc/socket'], function(util, Socket) {
             return cnxn;
         },
 
+        //
+        // WEBRTC HANDSHAKE STUFF
+        //
         makeOffer: function() {
             this.cnxn.createOffer(util.proxy(this.setLocalAndSendMessage, this));
         },
@@ -84,6 +96,7 @@ define(['util', 'rtc/socket'], function(util, Socket) {
         },
 
 
+        // Send data via connection's data channel. 
         sendData: function(data) {
           this.dataChannel.send(data);
         },
@@ -92,55 +105,25 @@ define(['util', 'rtc/socket'], function(util, Socket) {
             console.log('RTC: Closing peer connection', this);
             if (this.dataChannel) {
                 this.dataChannel.close();
-                this.dataChannel = null;
             }
             if (this.cnxn) this.cnxn.close();
-            this.cnxn = null;
-
-            this.started = false;
-        },
-
-        getStatus: function() {
-            return (this.cnxn.iceGatheringState == 'complete' &&
-                    this.cnxn.iceConnectionState == 'connected');
         },
 
         sendMessage: function(msg) {
-            // TODO: rtc shouldn't know anything about client_id's
-            msg.from = this.server_id;
+            // TODO: should rtc know anything about client_id's?
+            msg.from = this.local_id;
             msg.dest = this.client_id; 
-            Socket.sendMessage(msg);
+            this.socket.send(JSON.stringify(msg));
         },
 
         //
         // CALLBACKS
         //
-        onDataChannelStateChange: function() {
-            if (!this.dataChannel) return;
-
-            var readyState = this.dataChannel.readyState,
-                dataChannel = this.dataChannel;
-
-            console.log('RTC: Data channel state change', readyState);
-            if (readyState == "open") {
-                this.dataChannel.onmessage = util.proxy(function(e){ 
-                        e.client_id = this.client_id;
-                        this.onReceiveMessageCallback(e);
-                    }, 
-                    this
-                );
-            } 
-
-            this.dataChannelStateCallback(this);
-        },
-
-
+        // A data channel is offered by the other side via ICE. Save a 
+        // reference.
         newDataChannelCallback: function(event) {
-          console.log('RTC: Created new data channel.');
-          this.dataChannel = event.channel;
-          this.dataChannel.onmessage = util.proxy(this.onReceiveMessageCallback, this);
-          this.dataChannel.addEventListener('open', util.proxy(this.onDataChannelStateChange, this));
-          this.dataChannel.addEventListener('close', util.proxy(this.onDataChannelStateChange, this));
+            this.dataChannel = event.channel;
+            this.trigger('data_channel_ready', this)
         },
 
         onIceCandidate: function onIceCandidate(event) {
@@ -154,12 +137,8 @@ define(['util', 'rtc/socket'], function(util, Socket) {
             } 
         },
 
-        onReceiveMessageCallback: function onReceiveMessageCallback(event) {
-            if(this.ondatachannel) {
-                this.ondatachannel(event);
-            }
-        },
     });
 
-    return RTCConnection;
+    _.extend(RTCConnection.prototype, Backbone.Events)
+    return RTCConnection
 });

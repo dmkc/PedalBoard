@@ -9,9 +9,4 @@ define({
         return this.socket;
     },
 
-    sendMessage: function sendMessage(message) {
-        var msgString = JSON.stringify(message);
-        //console.log("TO WSS:", msgString);
-        this.socket.send(msgString);
-    }
 });
