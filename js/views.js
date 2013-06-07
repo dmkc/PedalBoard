@@ -75,7 +75,8 @@ define(
                 },
 
                 init: function() {
-                    this.controller = PedalBoard.PedalBoard.init();
+                    this.controller = PedalBoard.PedalBoard.init()
+                    this.pedalList = new Backbone.SyncLList({id:'pedalList'})
                     this.dom = {
                         pedals: this.$('#pedals')
                     }

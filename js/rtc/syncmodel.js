@@ -48,16 +48,17 @@ define(['backbone', 'util'], function(Backbone, util) {
 
         init: function(peer) {
             if(!peer) throw "SyncRouter needs to be initiated with a Peer node"
-                //
+
             // RootModel is where we store references to all collectons
             this.rootModel = new RootModel({id: '_root'})
+            this.rootModel.set('_collections', [], {noBroadcast: true}) 
 
             this.peer = peer;
             this.peer.on('datachannel', 
                          util.proxy(this.dataChannelCallback, this)
                         );
             this.peer.on('data_channel_state', util.proxy(this.dataChannelState, this));
-            Backbone.SyncLList.init()
+            this.trigger('init', this)
         },
 
         makeMsg: function(model, type) {
@@ -125,7 +126,7 @@ define(['backbone', 'util'], function(Backbone, util) {
                 // Model already in the pool
                 if(model == null) {
                     console.error('BB: Request to sync a missing model', msg);
-                    return;
+                    return
                 }
 
                 this.peer.sendTo(
@@ -136,13 +137,13 @@ define(['backbone', 'util'], function(Backbone, util) {
         },
 
         dataChannelState: function(e) {
+            // Exchange root nodes on a fresh data channel connection. This
+            // lets the other peer know what collections are available.
             if (e.state == 'open') {
                 this.peer.welcome(
                     SyncRouter.makeMsg(SyncRouter.rootModel, 'sync_full')
                 )
             }
-            // Pass through connection state changes
-            //this.trigger('connection_state', e);
         },
         
     },
@@ -247,8 +248,9 @@ define(['backbone', 'util'], function(Backbone, util) {
         return result;
     }
 
-    SyncModel.request = function(name, model_id) {
-        var model = ModelPool.get(name, model_id)
+    SyncModel.request = function(model_id) {
+        var name = this.prototype.name,
+            model = ModelPool.get(name, model_id)
         if (!model) {
             model = new SyncRouter.modelMap[name]({id: model_id})
         }
@@ -271,7 +273,7 @@ define(['backbone', 'util'], function(Backbone, util) {
                 this.id = this.cid;
 
             var cols = SyncRouter.rootModel.get('_collections').splice(0)
-            if (!(this.id in cols)) {
+            if (cols.indexOf(this.id) < 0) {
                 cols.push(this.id)
                 SyncRouter.rootModel.set('_collections', cols)
             }
@@ -308,6 +310,10 @@ define(['backbone', 'util'], function(Backbone, util) {
             return model
         },
 
+        empty: function() {
+            return !this.get('_next')
+        },
+
         // Recursively sync this list by syncing every model in the list
         sync: function() {
             var linkedList = this
@@ -332,9 +338,6 @@ define(['backbone', 'util'], function(Backbone, util) {
         },
     });
 
-    SyncLList.init = function() {
-        SyncRouter.rootModel.set('_collections', []) 
-    };
 
     // A magic model that keeps track of all collections in the swarm
     var RootModel = SyncModel.extend({

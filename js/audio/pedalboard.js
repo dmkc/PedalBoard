@@ -37,6 +37,7 @@ define(
 
                 // Listen for new PedalModel objects and add corresponding
                 // audio nodes.
+                // TODO: add models to a linked list instead
                 Backbone.ModelPool.on('add', this.addPedal,this)
 
                 return this;

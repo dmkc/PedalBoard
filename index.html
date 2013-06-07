@@ -4,62 +4,60 @@
         <meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1">
         <meta http-equiv="X-UA-Compatible" content="chrome=1" />
         <base target="_blank">
-        <title>RTCDataChannel</title>
-        <style>
-            div#buttons {
-                margin: 0 0 1em 0;
-            }
-            div#receive {
-            }
-            div#send {
-                float: left;
-                margin: 0 3em 1em 0;
-            }
-            div#sendReceive {
-                margin: 0 0 1em 0;
-            }
-            \h1 {
-                margin: 0 0 1em 0;
-            }
-            h2 {
-                margin: 0 0 0.5em 0;
-            }
-            textarea {
-                color: #444;
-                font-family: 'Courier New', monospace;
-                font-size: 1em;
-                height: 7.0em;
-                padding: 0.5em;
-            }
-        </style>
+        <title>Web Audio test</title>
 
-        <script data-main="js/main" src="js/require.min.js"></script>
+        <link rel="stylesheet" type="text/css" href="style/pedals.css">
+        <script data-main="js/main.js" src="js/require.min.js"></script>
     </head>
     <body>
-        <div id="container">
+        <button id="play_sample_0">Play sample 1</button>
+        <button id="live_input">Use live input</button>
+        <button id="stop_input">Stop this madness</button>
 
-            <h1>RTCDataChannel</h1>
+        <button id="add_compressor">Add compressor</button>
+        <button id="add_stereochorus">Add stereo chorus</button>
 
-            <div id="buttons">
-                <button id="makeMaster"> Master</button>
-                <button id="makeSlave">Slave</button>
-                <button id="sendButton" onclick="">Send</button>
-                <button id="closeButton" onclick="closeDataChannels()">Stop</button>
-            </div>
-
-            <div id="sendReceive">
-                <div id="send">
-                    <h2>Send</h2>
-                    <textarea id="dataChannelSend" placeholder="Press Start, enter some text, then press Send."></textarea>
-                </div>
-                <div id="receive">
-                    <h2>Receive</h2>
-                    <textarea id="dataChannelReceive"></textarea>
-                </div>
-            </div>
-
-            <input id='testSlider' type="range" min=1 max=100>
-
+        <div id="pedals">
+            
         </div>
+        
     </body>
+    <div id="templates">
+        <div id="template_compressor" class="pedal pedal_compressor">
+            <input class="bypass" type="checkbox" title="Bypass this pedal">
+            <label>Attack
+                <input class="attack" type="range" min="0.0" max="1.0" step="0.01">
+            </label>
+            <label>Threshold
+                <input class="threshold" type="range" min="-100" max="0">
+            </label>
+            <label>Ratio
+                <input class="ratio" type="range" min="1" max="20">
+            </label>
+            <label>Knee
+                <input class="knee" type="range" min="0" max="40">
+            </label>
+            <label>Gain
+                <input class="gain" type="range" min="0" max=10>
+            </label>
+            <button class="remove">X</button>
+        </div>
+
+        <div id="template_stereochorus" class="pedal pedal_compressor">
+            <input class="bypass" type="checkbox" title="Bypass this pedal">
+            <label>
+                Speed
+                <input class="speed" type="range" min="0.5" max="15" step="0.25">
+            </label>
+            <label>
+                Delay
+                <input class="delay" type="range" min="0.005" max="0.055" step="0.005">
+            </label>
+            <label>
+                Depth
+                <input class="depth" type="range" min="0.0005" max="0.004" step="0.00008">
+            </label>
+            <button class="remove">X</button>
+        </div>
+    </div>
 </html>
