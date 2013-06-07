@@ -15,17 +15,12 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
     NEW_CLIENT_ID = -1;
 
     function Peer() {
-        var registered = this.registered = false,
-            client_id = this.client_id = NEW_CLIENT_ID,
-            connections = this.connections = [],
-            that = this;
+        var registered = this.registered = false
 
-            this.initSocket()
-            this.socket.addEventListener('open', function() {
-                that.register();
-                that.announce();
-            });
+        this.client_id = NEW_CLIENT_ID
+        this.connections = []
 
+        this.initSocket()
     }
 
     Peer.prototype = Object.create(
@@ -37,22 +32,29 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
 
         // Set up WebSocket for RTC handshake
         initSocket: function() {
+            var that = this
+            if (this.socket) 
+                delete this.socket
+
             this.socket = new WebSocket('ws://'+window.location.hostname+':1337/')
             this.socket.addEventListener(
                 'message', 
                  _.bind(this.processMessage, this))
 
             // Keep trying to re-connect to websocket server if connection closes
-            this.socket.addEventListener('close',  _.bind(function() {
+            this.socket.addEventListener('close', _.bind(function() {
                     console.log('Peer: WebSocket closed, attempting to reconnect');
-                    this.registered = false;
+                    this.registered = false
 
                     setTimeout(
                         _.bind(this.initSocket, this), 
                         1500)
                 }, this));
 
-
+            this.socket.addEventListener('open', function() {
+                that.register()
+                that.announce()
+            });
         },
 
         // Register with the server. The server will return a client_id, 

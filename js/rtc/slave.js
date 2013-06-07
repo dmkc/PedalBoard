@@ -31,9 +31,10 @@ define(['util', 'rtc/peer', 'rtc/socket'], function(util, Peer, Socket) {
             } else {
                 cnxn = this.lastConnection();
 
-                // Respond to master with an offer, unless we're already connected
+                // Master is announcing self. Respond with an offer
                 if (msg.type == 'announce_master' && cnxn == null) {
                     cnxn = this.newConnection(msg.client_id, true);
+                    cnxn.on('data_channel_state', _.bind(this.dataChannelStateChange, this))
 
                     this.addConnection(cnxn);
                     
@@ -41,6 +42,7 @@ define(['util', 'rtc/peer', 'rtc/socket'], function(util, Peer, Socket) {
                 } else if (msg.type === 'offer') {
                     if (cnxn == null) {
                         var cnxn = this.newConnection(msg.client_id, false);
+                        cnxn.on('data_channel_state', _.bind(this.dataChannelStateChange, this))
                         cnxn.local_id = this.client_id;
                         this.addConnection(cnxn);
                     } 
@@ -59,7 +61,14 @@ define(['util', 'rtc/peer', 'rtc/socket'], function(util, Peer, Socket) {
                     cnxn.close();
                 } 
             }
-        }
+        },
+
+        // Announce self if data channel dies in hopes that master returned
+        dataChannelStateChange: function(e) {
+            if (e.state == 'closed') {
+                this.announce()
+            }
+        },
     }));
 
     return Slave;

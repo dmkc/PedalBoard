@@ -25,8 +25,8 @@ define(['util', 'rtc/peer', 'rtc/socket'], function(util, Peer, Socket) {
 
             if (!this.registered) {
                 if (msg.type === 'register') {
-                    this.client_id = msg.client_id;
-                    this.registered = true;
+                    this.client_id = msg.client_id
+                    this.registered = true
 
                     console.log("Master: register with server ID", this.client_id);
 
