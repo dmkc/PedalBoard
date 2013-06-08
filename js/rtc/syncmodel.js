@@ -75,7 +75,8 @@ define(['backbone', 'util'], function(Backbone, util) {
             };
         },
 
-        dataChannelCallback: function(e) {
+        // Main model sync handler
+        dataChannelCallback: function(e, connection) {
             var msg = e.dataParsed,
                 subscr,
                 model;
@@ -110,7 +111,7 @@ define(['backbone', 'util'], function(Backbone, util) {
                     // Request the rest of the model if this wasn't a full dump
                     if(msg.type != 'sync_full') {
                         this.peer.sendTo(
-                            e.client_id,
+                            connection,
                             this.makeMsg(model, 'sync_request')
                         );
                     }
@@ -132,7 +133,7 @@ define(['backbone', 'util'], function(Backbone, util) {
                 }
 
                 this.peer.sendTo(
-                    e.client_id, 
+                    connection,
                     this.makeMsg(model, 'sync_full')
                 );
             }

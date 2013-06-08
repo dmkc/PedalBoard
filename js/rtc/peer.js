@@ -11,8 +11,8 @@
  *
  * - data_channel_message -- a new message on one of the peer data channels.
  */
-define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'], 
-       function(util, RTCConnection, Socket, _, Backbone) {
+define(['util', 'rtc/rtc', 'underscore', 'backbone'], 
+       function(util, RTCConnection, _, Backbone) {
     // Magic number for an unregistered client
     NEW_CLIENT_ID = -1;
 
@@ -32,18 +32,20 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
             throw 'Not implemented'
         },
 
-        // Set up WebSocket for RTC handshake
+        // Initialize WebSocket connection.  WebSocket is used to exchange 
+        // control messages about the session and WebRTC handshake messages
         initSocket: function() {
             var that = this
-            if (this.socket) 
-                delete this.socket
+            // Clean up existing socket if there is one, which will clean
+            // up any event handling we've set up so far
+            if (this.socket) delete this.socket
 
             this.socket = new WebSocket('ws://'+window.location.hostname+':1337/')
             this.socket.addEventListener(
                 'message', 
                  _.bind(this.processMessage, this))
 
-            // Keep trying to re-connect to websocket server if connection closes
+            // Keep trying to re-connect to WebSocket server if connection closes
             this.socket.addEventListener('close', _.bind(function() {
                     console.log('Peer: WebSocket closed, attempting to reconnect');
                     this.registered = false
@@ -53,14 +55,16 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
                         1500)
                 }, this));
 
+            // Register and announce self when a new socket connection
+            // is established.
             this.socket.addEventListener('open', function() {
                 that.register()
                 that.announce()
             });
         },
 
-        // Register with the server. The server will return a client_id, 
-        // unless we already have one in case of a reconnect
+        // Register with the server. The server will return a client_id.
+        // See Master and Slave's `processMessage`
         register: function() {
             this.sendSocketMessage({
                 type: "register",
@@ -68,8 +72,6 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
             });
         },
 
-        // WebSockets are used to exchange control messages about the session,
-        // as well as the WebRTC handshake messages
         sendSocketMessage: function sendMessage(message) {
             var msgString = JSON.stringify(message);
             //console.log("TO WSS:", msgString);
@@ -91,17 +93,14 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
         },
 
         // Send message to a connection with given client_id
-        sendTo: function(client_id, msg) {
-            console.log('PEERS: Sending msg to client', client_id, msg);
-            var cnxn;
+        sendTo: function(connection, msg) {
+            console.log('PEERS: Sending msg to connection',connection.client_id, msg);
 
-            for(var c in this.connections) {
-                var cnxn = this.connections[c];
-
-                if (cnxn.client_id == client_id) {
-                    cnxn.sendData(JSON.stringify(msg));
-                }
-            };
+            try {
+                connection.sendData(JSON.stringify(msg));
+            } catch(e) {
+                console.log("Peer: Couldn't send data to:", connection);
+            }
         },
 
         // Create a new RTC connection for given client_id.
@@ -110,14 +109,13 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
                 connection = new RTCConnection(client_id, local_id) .init(
                                 this.socket, dataChannel)
 
-            // TODO: Clean up disconnected connections in Master
-            // Try to reestablish connection if it dies
+            // Clean up the connection if it dies
             connection.cnxn.addEventListener('iceconnectionstatechange', function(e){
                 console.log('PEER: ICE state change:', e, 
                             'connection:', this.iceConnectionState,
                             'gathering:', this.iceGatheringState);
 
-                // The connection has died. Close the data channel.
+                // The connection died. Clean up and close the data channel.
                 if (this.iceConnectionState == 'disconnected') {
                     connection.dataChannel.close();
                     console.log('Peer: ICE disconnect. Removing connection:', connection);
@@ -134,7 +132,7 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
                 this.dataChannel.addEventListener('message', 
                     function(message){
                         message.client_id = connection.client_id
-                        that.dataChannelMessage(message)
+                        that.dataChannelMessage(message, connection)
                     })
 
                 this.dataChannel.addEventListener('open', 
@@ -158,7 +156,7 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
 
         // Parse raw data channel message into JSON, then notify
         // all subscribers of new message
-        dataChannelMessage: function(msg) {
+        dataChannelMessage: function(msg, connection) {
         // TODO: ignore all messages outside of this session ID
             console.log('Peer: New data channel message')
             var json;
@@ -175,17 +173,19 @@ define(['util', 'rtc/rtc', 'rtc/socket', 'underscore', 'backbone'],
             }
 
             msg.dataParsed = json;
-            this.trigger('data_channel_message', msg);
+            this.trigger('data_channel_message', msg, connection);
         },
 
-        // Data channel becomes open or closed. 
+        // Notify subscribers of data channel state change. State will change
+        // on a successful new connection, or after a disconnect when cleaned
+        // up by the callbacks in `newConnection`
         dataChannelState: function(connection) {
             console.log("Peer: Data channel state change for client_id:",
                        connection.client_id)
             this.trigger('data_channel_state', {
                 state: connection.dataChannel.readyState,
                 client_id: connection.client_id
-            });
+            }, connection);
 
         },
 
