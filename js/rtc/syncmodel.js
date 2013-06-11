@@ -47,6 +47,8 @@ define(['backbone', 'util'], function(Backbone, util) {
         rootModel: null,
 
         init: function(peer) {
+            var that = this
+
             if(!peer) throw "SyncRouter needs to be initiated with a Peer node"
 
             // RootModel is where we store references to all collectons
@@ -59,20 +61,24 @@ define(['backbone', 'util'], function(Backbone, util) {
                         );
             this.peer.on('data_channel_state', util.proxy(this.dataChannelState, this));
             this.trigger('init', this)
+
+            // Remove all connections before quitting
+            window.addEventListener('beforeunload', function(){
+                that.peer.shutdown()
+            })
         },
 
-        makeMsg: function(model, type) {
-            var type = type || 'sync_update';
-
-            return {
-                type: type,
-                body: {
+        makeMsg: function(model, full) {
+            if (model) {
+                return {
                     name: model.name,
                     id:   model.id,
-                    data: (type != 'sync_full') ? model.changedAttributes() 
+                    data: (full) ? model.changedAttributes() 
                                  : _.clone(model.attributes)
                 }
-            };
+            } else {
+                return null
+            }
         },
 
         // Main model sync handler
@@ -112,7 +118,8 @@ define(['backbone', 'util'], function(Backbone, util) {
                     if(msg.type != 'sync_full') {
                         this.peer.sendTo(
                             connection,
-                            this.makeMsg(model, 'sync_request')
+                            'sync_request',
+                            this.makeMsg(model)
                         );
                     }
 
@@ -134,7 +141,8 @@ define(['backbone', 'util'], function(Backbone, util) {
 
                 this.peer.sendTo(
                     connection,
-                    this.makeMsg(model, 'sync_full')
+                    'sync_full',
+                    this.makeMsg(model, true)
                 );
             }
         },
@@ -144,7 +152,8 @@ define(['backbone', 'util'], function(Backbone, util) {
             // connected slaves.
             if (e.state == 'open' && this.peer.master) {
                 this.peer.sendToAll(
-                    SyncRouter.makeMsg(SyncRouter.rootModel, 'sync_full')
+                    'sync_full',
+                    SyncRouter.makeMsg(SyncRouter.rootModel, true)
                 )
             }
         },
@@ -166,10 +175,11 @@ define(['backbone', 'util'], function(Backbone, util) {
         console.log('Significant model event', eventName);
         try {
             SyncRouter.peer.sendToAll(
+                'sync_update',
                 SyncRouter.makeMsg(target)
             );
         } catch(e) {
-            console.error("SyncRouter: not initialized.", e);
+            console.error("SyncRouter: error sending update to:", target);
         }
     },
 
@@ -179,7 +189,8 @@ define(['backbone', 'util'], function(Backbone, util) {
             // Request update to next
             //this._next = null
             SyncRouter.peer.sendToAll(
-                SyncRouter.makeMsg(this, 'sync_request')
+                'sync_request',
+                SyncRouter.makeMsg(this)
             )
         },
 

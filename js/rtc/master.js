@@ -23,9 +23,8 @@ define(['util', 'rtc/peer'], function(util, Peer) {
 
         // Process an incoming WebSocket message. This is either a control
         // message related to this session, or a WebRTC handshake message
-        processMessage: function(message) {
-            var msg = JSON.parse(message.data),
-                cnxn;
+        processMessage: function(msg) {
+            var cnxn;
 
             // Server responding to a register message. Ignore it if we 
             // already have a client_id
@@ -35,6 +34,7 @@ define(['util', 'rtc/peer'], function(util, Peer) {
                     this.registered = true
 
                     console.log("Master: register with server ID", this.client_id);
+                    this.announce()
 
                 } else {
                     this.register();
@@ -70,9 +70,10 @@ define(['util', 'rtc/peer'], function(util, Peer) {
                     cnxn.addCandidate(msg);
 
                 // The remote peer closed its connection so clean up
-                } else if (msg.type === 'bye' && peer.started) {
-                    console.log('Master: Closed connection to peer');
-                    cnxn.close();
+                } else if (msg.type === 'bye') {
+                    console.log('Master: Closed connection to peer')
+                    cnxn.close()
+                    this.removeConnection(cnxn)
                 } 
             }
         },

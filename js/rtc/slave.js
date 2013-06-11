@@ -19,9 +19,8 @@ define(['util', 'rtc/peer'], function(util, Peer) {
 
         // Process an incoming WebSocket message. This is either a control
         // message related to this session, or a WebRTC handshake message
-        processMessage: function(message) {
-            var msg = JSON.parse(message.data),
-                cnxn;
+        processMessage: function(msg) {
+            var cnxn;
 
             if (!this.registered) {
                 if (msg.type === 'register') {
@@ -29,6 +28,7 @@ define(['util', 'rtc/peer'], function(util, Peer) {
                     this.registered = true;
 
                     console.log("Slave: registered with server ID", this.client_id);
+                    this.announce()
 
                 } else {
                     this.register();

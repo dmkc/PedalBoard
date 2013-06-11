@@ -27,9 +27,9 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
 
     Peer.prototype = Object.create(
         _.extend({
-        // Handle WebSocket messages
-        processMessage: function(message) {
-            throw 'Not implemented'
+
+        parseAndProcess: function(msg) {
+            return this.processMessage(JSON.parse(msg.data))
         },
 
         // Initialize WebSocket connection.  WebSocket is used to exchange 
@@ -43,7 +43,7 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
             this.socket = new WebSocket('ws://'+window.location.hostname+':1337/')
             this.socket.addEventListener(
                 'message', 
-                 _.bind(this.processMessage, this))
+                 _.bind(this.parseAndProcess, this))
 
             // Keep trying to re-connect to WebSocket server if connection closes
             this.socket.addEventListener('close', _.bind(function() {
@@ -59,7 +59,6 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
             // is established.
             this.socket.addEventListener('open', function() {
                 that.register()
-                that.announce()
             });
         },
 
@@ -79,7 +78,11 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
         },
 
         // Send message to all current WebRTC connections
-        sendToAll: function(msg, except) {
+        sendToAll: function(type, body, except) {
+            var msg = {
+                type: type,
+                body: body
+            }
             console.log('PEERS: Sending msg to all peers', msg);
 
             this.connections.forEach(function(cnxn) {
@@ -93,7 +96,11 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
         },
 
         // Send message to a connection with given client_id
-        sendTo: function(connection, msg) {
+        sendTo: function(connection, type, body) {
+            var msg = {
+                type: type,
+                body: body
+            }
             console.log('PEERS: Sending msg to connection',connection.client_id, msg);
 
             try {
@@ -154,6 +161,13 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
             return connection
         },
 
+        shutdown: function(){
+            this.sendToAll('bye')
+        },
+
+        // 
+        // CALLBACKS
+        //
         // Parse raw data channel message into JSON, then notify
         // all subscribers of new message
         dataChannelMessage: function(msg, connection) {
@@ -161,7 +175,7 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
             console.log('Peer: New data channel message')
             var json;
             if(!msg.data) {
-                console.error("PEER:Empty data channel message");
+                console.error("PEER: Empty data channel message");
                 return
             }
 
@@ -172,8 +186,13 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
                 return
             }
 
-            msg.dataParsed = json;
-            this.trigger('data_channel_message', msg, connection);
+            msg.dataParsed = json
+            msg.dataParsed.client_id = connection.client_id
+            if (msg.dataParsed.type == 'bye') {
+                this.processMessage(msg.dataParsed)
+            } else {
+                this.trigger('data_channel_message', msg, connection);
+            }
         },
 
         // Notify subscribers of data channel state change. State will change
@@ -216,7 +235,6 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
 
         removeConnection: function(cnxn) {
             this.connections.splice(this.connections.indexOf(cnxn), 1);
-            cnxn.close();
         },
     }, Backbone.Events));
 
