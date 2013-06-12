@@ -84,7 +84,8 @@ wsServer.on('request', function(request) {
             // Client (re-)registration
             if (msg.type == "register") {
                 assignClientID(msg, this); 
-                sendTo = [this];
+                msg.client_count = clients.length
+                sendTo = [this]
             /*
             } else if (msg.type == 'announce_master') {
                 //sendTo =  

@@ -35,6 +35,7 @@ define(['util', 'rtc/peer'], function(util, Peer) {
 
                     console.log("Master: register with server ID", this.client_id);
                     this.announce()
+                    this.trigger('registered', msg)
 
                 } else {
                     this.register();

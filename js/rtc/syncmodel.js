@@ -52,6 +52,7 @@ define(['backbone', 'util'], function(Backbone, util) {
             if(!peer) throw "SyncRouter needs to be initiated with a Peer node"
 
             // RootModel is where we store references to all collectons
+            this.initialized = false
             this.rootModel = new RootModel({id: '_root'})
             this.rootModel.set('_collections', [], {noBroadcast: true}) 
 
@@ -60,12 +61,22 @@ define(['backbone', 'util'], function(Backbone, util) {
                          util.proxy(this.dataChannelCallback, this)
                         );
             this.peer.on('data_channel_state', util.proxy(this.dataChannelState, this));
-            this.trigger('init', this)
+            this.peer.once('registered', _.bind(function(msg){
+                // If we're the only client in the session, then initialization
+                // was successful. Otherwise, wait for the first data channel
+                // to be opened
+                console.log('SyncRouter: registered', msg)
+                if(msg.client_count > 1) return
+                this.initialized = true
+                this.trigger('init')
+            }, this))
 
             // Remove all connections before quitting
             window.addEventListener('beforeunload', function(){
                 that.peer.shutdown()
             })
+
+            this.peer.init()
         },
 
         makeMsg: function(model, full) {
@@ -156,6 +167,8 @@ define(['backbone', 'util'], function(Backbone, util) {
                     SyncRouter.makeMsg(SyncRouter.rootModel, true)
                 )
             }
+            if(!this.initialized)
+                this.trigger('init')
         },
         
     },
@@ -172,7 +185,6 @@ define(['backbone', 'util'], function(Backbone, util) {
             opts.noBroadcast) {
             return;
         }
-        console.log('Significant model event', eventName);
         try {
             SyncRouter.peer.sendToAll(
                 'sync_update',
@@ -185,13 +197,19 @@ define(['backbone', 'util'], function(Backbone, util) {
 
     // A synchronizable model
     SyncModel = Backbone.Model.extend({
+        name: 'SyncModel',
         sync: function(){
-            // Request update to next
-            //this._next = null
-            SyncRouter.peer.sendToAll(
-                'sync_request',
-                SyncRouter.makeMsg(this)
-            )
+            // If there are other peers in the swarm, we should be connected
+            // to one at this point. Otherwise, we're the only peer and 
+            // have no one to sync with.
+            if(SyncRouter.peer.connections.length === 0) {
+                this.trigger('sync')
+            } else {
+                SyncRouter.peer.sendToAll(
+                    'sync_request',
+                    SyncRouter.makeMsg(this)
+                )
+            }
         },
 
         constructor: function() {
@@ -237,8 +255,8 @@ define(['backbone', 'util'], function(Backbone, util) {
                 this.set('_prev', {
                     name: prev.name,
                     id: prev.id
-                });
-                this._prev = prev;
+                })
+                this._prev = prev
             } else {
                 prevNode = this.get('_prev')
                 // Update reference to the previous model in the collection
@@ -262,13 +280,18 @@ define(['backbone', 'util'], function(Backbone, util) {
         return result;
     }
 
-    SyncModel.request = function(model_id) {
-        var name = this.prototype.name,
-            model = ModelPool.get(name, model_id)
+    SyncModel.requestName = function(name, model_id) {
+        var model = ModelPool.get(name, model_id)
         if (!model) {
+            if(!SyncRouter.modelMap[name])
+                throw name + " is not a valid model name"
+
             model = new SyncRouter.modelMap[name]({id: model_id})
         }
         return model
+    }
+    SyncModel.request = function(model_id) {
+        return SyncModel.requestName(this.prototype.name, model_id)
     }
 
     // A synchronized linked list
@@ -297,13 +320,16 @@ define(['backbone', 'util'], function(Backbone, util) {
         add: function(model) {
             var tail = this.tail || this
 
+            if(!model.attributes)
+                throw "Object not an instance of SyncModel"
+
             if (model.get('_next') || model.get('_prev')) {
                 console.error("SyncLList: This model is already in a collection")
                 return
             }
 
             tail._nextNode(model)
-            model._prevNode(this)
+            model._prevNode(tail)
             this.tail = model
             this.trigger('add', model)
             return model
@@ -334,8 +360,12 @@ define(['backbone', 'util'], function(Backbone, util) {
 
             this.once('sync', function listSyncHandler() {
                 var next = this.get('_next'),
-                    nextNode
+                    prev = this.get('_prev'),
+                    nextNode, prevNode
 
+                if (prev) {
+                    this._prev = SyncModel.requestName(prev.name, prev.id)
+                }
                 // Reached end of linked list
                 if (!next) {
                     console.log("SyncLList: sync reached end of list", this)
@@ -343,7 +373,7 @@ define(['backbone', 'util'], function(Backbone, util) {
                     return
                 }
 
-                nextNode = SyncModel.request(next.name, next.id)
+                nextNode = SyncModel.requestName(next.name, next.id)
                 nextNode.once('sync', listSyncHandler)
                 this._next = nextNode
                 nextNode.sync()

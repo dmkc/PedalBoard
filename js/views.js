@@ -74,14 +74,20 @@ define(
                     'click #stop_input'       : 'stopInput'
                 },
 
-                init: function() {
+                init: function(newSession) {
                     this.controller = PedalBoard.PedalBoard.init()
-                    this.pedalList = new Backbone.SyncLList({id:'pedalList'})
                     this.dom = {
                         pedals: this.$('#pedals')
                     }
                     this.views = [];
-                    return this;
+                    this.pedalList = Backbone.SyncLList.request('pedalList')
+                    this.pedalList.once('sync', _.bind(this.initDone,this))
+                    this.pedalList.sync()
+                    return this
+                },
+
+                initDone: function() {
+                    console.log("PedalView: initialized pedal list")
                 },
 
                 addPedal: function(e) {
@@ -102,6 +108,7 @@ define(
                         }).init();
                     }
                     this.dom.pedals.append(view.$el);
+                    this.pedalList.add(params)
                 },
 
                 playSample: function(e) {

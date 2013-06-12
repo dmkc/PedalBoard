@@ -15,8 +15,8 @@ requirejs.config({
 });
 
 
-require(['rtc/master', 'rtc/slave', 'rtc/syncmodel', 'peerui', 'jquery-1.9.1.min','views'], 
-        function(Master, Slave, Backbone, PeerUI, jQuery, Views) {
+require(['rtc/master', 'rtc/slave', 'rtc/syncmodel', 'peerui', 'jquery-1.9.1.min','views', 'models'], 
+        function(Master, Slave, Backbone, PeerUI, jQuery, Views, Models) {
     var peer;
 
     window.Backbone = Backbone;
@@ -28,17 +28,14 @@ require(['rtc/master', 'rtc/slave', 'rtc/syncmodel', 'peerui', 'jquery-1.9.1.min
     }
 
     function startTest(master) {
+        // TODO: turn master/slave into a new/existing session flag
         peer =  (master) ? new Master() : new Slave();
-        PeerUI.init(peer);
+        //PeerUI.init(peer);
 
         Backbone.SyncRouter.on('init', function() {
             console.log("Sync router initialized")
-            window.PedalBoardView = new Views.PedalBoardView().init();
+            window.PedalBoardView = new Views.PedalBoardView().init(master);
 
-            if(master) {
-                new Backbone.SyncLList({id:'_slotViews'})
-                new Backbone.SyncLList({id:'_models'})
-            }
         })
 
         Backbone.SyncRouter.init(peer)

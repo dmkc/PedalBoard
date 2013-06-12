@@ -21,12 +21,15 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
 
         this.client_id = NEW_CLIENT_ID
         this.connections = []
-
-        this.initSocket()
     }
 
     Peer.prototype = Object.create(
         _.extend({
+
+        init: function(){
+            this.initSocket()
+            return this;
+        },
 
         parseAndProcess: function(msg) {
             return this.processMessage(JSON.parse(msg.data))

@@ -11,13 +11,6 @@ define(['backbone', 'util'], function(Backbone, util) {
             console.log("PEERUI: Init with peer", peer);
         },
 
-        send: function(type, body) {
-            this.peer.sendToAll({
-                    type: type,
-                    body: body
-            });
-        },
-
         handleMessage: function(e) {
             var msg = e.dataParsed;
 
