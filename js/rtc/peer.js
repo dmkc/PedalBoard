@@ -66,7 +66,6 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
                 // WebRTC handshake message handling
                 cnxn = this.findConnection(msg.client_id);
 
-                // A slave is offering to set up a new connection. Respond.
                 if (msg.type === 'offer') {
                     if (cnxn == null) {
                         var cnxn = this.newConnection(msg.client_id, this.client_id, false);
@@ -76,7 +75,7 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
                     cnxn.respondToOffer(msg);
                     console.log('Peer: Responding to new offer:', msg);
 
-                // A new slave connected to the swarm. Send it an offer.
+                // A new peer connected to the swarm. Send it an offer.
                 } else if (msg.type == 'announce') {
                     cnxn = cnxn || this.newConnection(msg.client_id, this.client_id, true)
                     this.addConnection(cnxn);
@@ -100,7 +99,7 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
             }
         },
 
-        // Initialize WebSocket connection.  WebSocket is used to exchange 
+        // jet connection.  WebSocket is used to exchange 
         // control messages about the session and WebRTC handshake messages
         initSocket: function() {
             var that = this

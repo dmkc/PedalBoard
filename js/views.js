@@ -82,7 +82,12 @@ define(
                     this.views = [];
                     this.pedalList = Backbone.SyncLList.request('pedalList')
                     this.pedalList.once('sync', _.bind(this.initDone,this))
+                    this.pedalList.on('add', function(){
+                        console.log('PedalList: new item added')
+                    })
                     this.pedalList.sync()
+
+                    window.PedalList = this.pedalList
                     return this
                 },
 

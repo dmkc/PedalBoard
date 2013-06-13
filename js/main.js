@@ -20,13 +20,13 @@ require(['rtc/peer', 'rtc/syncmodel', 'peerui', 'jquery-1.9.1.min','views', 'mod
     var peer;
 
     window.Backbone = Backbone;
+    window.Models = Models
     startTest()
 
     function startTest() {
         Backbone.SyncRouter.on('init', function() {
             console.log("Sync router initialized")
             window.PedalBoardView = new Views.PedalBoardView().init();
-
         })
 
         Backbone.SyncRouter.init()

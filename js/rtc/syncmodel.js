@@ -21,7 +21,6 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
                 curModel[model.id] = model
             }
 
-            this.trigger('add', model);
         },
 
         getAll: function(name) {
@@ -89,7 +88,7 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
                 return {
                     name: model.name,
                     id:   model.id,
-                    data: (full) ? model.changedAttributes() 
+                    data: (!full) ? model.changedAttributes() || {}
                                  : _.clone(model.attributes)
                 }
             } else {
@@ -101,20 +100,22 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
         dataChannelCallback: function(e, connection) {
             var msg = e.dataParsed,
                 subscr,
-                model;
+                model = ModelPool.get(msg.body.name, msg.body.id)
 
-            if (msg.type == 'sync_update' || 
-                msg.type == 'sync_full') 
+            console.log("Peer: New DC message", msg.type, msg)
+
+            if (msg.type == 'change' || 
+                msg.type == 'change_full') 
             {
-                model = ModelPool.get(msg.body.name, msg.body.id);
-
                 // Model already in the pool
                 if(model != null) {
                     model.set(msg.body.data, {
-                        silent: true
+                        broadcast: false
                     });
 
-                    model.trigger('sync', model)
+                    if(msg.type == 'change_full') {
+                        model.trigger('sync', model)
+                    }
 
                 // Model not yet present in the pool
                 } else {
@@ -126,18 +127,17 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
                     model = new this.modelMap[msg.body.name](msg.body.data);
 
                     // Request the rest of the model if this wasn't a full dump
-                    if(msg.type != 'sync_full') {
+                    if(msg.type != 'change_full') {
                         this.peer.sendTo(
                             connection,
-                            'sync_request',
+                            'request_change_full',
                             this.makeMsg(model)
                         );
                     }
                 }
 
             // Another peer requesting full data dump of model
-            } else if (msg.type == 'sync_request') {
-                model = ModelPool.get(msg.body.name, msg.body.id);
+            } else if (msg.type == 'request_change_full') {
 
                 // Model already in the pool
                 if(model == null) {
@@ -148,9 +148,14 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
 
                 this.peer.sendTo(
                     connection,
-                    'sync_full',
+                    'change_full',
                     this.makeMsg(model, true)
                 );
+            // New model added to a collection
+            } else if (msg.type == 'add' || msg.type == 'remove') {
+                SyncLList.findHead(model).trigger(msg.type, model, {
+                    broadcast: false
+                })
             }
         },
 
@@ -158,7 +163,7 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
             // New data channel. Send peer the root model.
             if (e.state == 'open') {
                 this.peer.sendToAll(
-                    'sync_full',
+                    'change_full',
                     SyncRouter.makeMsg(SyncRouter.rootModel, true)
                 )
             }
@@ -168,27 +173,16 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
         
     },
     
-    changeCallback = function changeCallback(eventName, target, opts) {
-        var uninteresting = ['request', 'sync', 'invalid', 'route'] 
-
-        // Broadcast all interesting non-sync originating events
-        if (uninteresting.indexOf(eventName) > -1 ||
-            eventName.indexOf(':') >= 0 ) {
-            return;
-        }
-        try {
-            SyncRouter.peer.sendToAll(
-                'sync_update',
-                SyncRouter.makeMsg(target)
-            );
-        } catch(e) {
-            console.error("SyncRouter: error sending update to:", target);
-        }
-    },
 
     // A synchronizable model
     SyncModel = Backbone.Model.extend({
         name: 'SyncModel',
+        set: function(attrs) {
+            Backbone.Model.prototype.set.apply(this, arguments)
+            if(attrs['_next'] || attrs['_prev']) {
+                console.log('SyncModel: updated linked list')
+            }
+        },
         sync: function(){
             // If there are other peers in the swarm, we should be connected
             // to one at this point. Otherwise, we're the only peer and 
@@ -197,7 +191,7 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
                 this.trigger('sync')
             } else {
                 SyncRouter.peer.sendToAll(
-                    'sync_request',
+                    'request_change_full',
                     SyncRouter.makeMsg(this)
                 )
             }
@@ -208,7 +202,7 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
             this._next = this._prev = null;
 
             Backbone.Model.apply(this, arguments);
-            this.on('all', changeCallback);
+            this.on('all', this.changeCallback);
 
             if(arguments[0] !== undefined &&
                arguments[0].id !== undefined)
@@ -255,6 +249,27 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
                     this._prev = ModelPool.get(prevNode.name, prevNode.id)
                 }
                 return this._prev;
+            }
+        },
+        changeCallback: function changeCallback(eventName, target, opts) {
+            var uninteresting = ['request', 'sync', 'invalid', 'route'],
+                opts = _.extend({ broadcast: true },opts)
+
+            // Broadcast all interesting non-sync originating events
+            if (uninteresting.indexOf(eventName) > -1 ||
+                eventName.indexOf(':') >= 0 ||
+                !opts.broadcast) {
+                return;
+            }
+
+            console.log('SyncModel: Model changed', target.id, target.changed)
+            try {
+                SyncRouter.peer.sendToAll(
+                    eventName,
+                    SyncRouter.makeMsg(target)
+                );
+            } catch(e) {
+                console.error("SyncRouter: error sending update to:", target);
             }
         },
 
@@ -309,7 +324,7 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
 
         // Add a model to collection's linked list
         add: function(model) {
-            var tail = this.tail || this
+            var tail = this._tail || this
 
             if(!model.attributes)
                 throw "Object not an instance of SyncModel"
@@ -321,7 +336,8 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
 
             tail._nextNode(model)
             model._prevNode(tail)
-            this.tail = model
+            model._llist = this
+            this._tail = model
             this.trigger('add', model)
             return model
         },
@@ -372,6 +388,14 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
             SyncModel.prototype.sync.apply(this,arguments)
         },
     });
+    SyncLList.findHead = function(model) {
+        if(model._llist) return model._llist
+
+        var cur = model
+        while(cur._prevNode() != null) cur = cur._prevNode()
+        model._llist = cur
+        return cur
+    }
 
 
     // A magic model that keeps track of all collections in the swarm
