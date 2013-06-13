@@ -86,12 +86,6 @@ wsServer.on('request', function(request) {
                 assignClientID(msg, this); 
                 msg.client_count = clients.length
                 sendTo = [this]
-            /*
-            } else if (msg.type == 'announce_master') {
-                //sendTo =  
-
-            } else if (msg.type == 'announce_slave') {
-            */
                 
             } else if (msg.dest > 0 && msg.from > 0) {
                 clients.forEach(function (outputConnection) {

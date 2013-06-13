@@ -1,8 +1,7 @@
 /*
  * Maintain a pool of WebRTC connections and their respective data channels.
  * Allows broadcasting messages to data channels of all connected peers, and
- * to connections with specific client ID's. Extended by Master and Slave
- * prototypes.
+ * to connections with specific client ID's. 
  *
  * EVENTS
  * - data_channel_state -- a change in the state of the data channel. The 
@@ -33,6 +32,72 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
 
         parseAndProcess: function(msg) {
             return this.processMessage(JSON.parse(msg.data))
+        },
+
+        // Announce self to all other peers after a new WebSocket connection
+        announce: function(){
+            this.sendSocketMessage({
+                type: "announce",
+                client_id: this.client_id
+            });
+        },
+
+        // Process an incoming WebSocket message. This is either a control
+        // message related to this session, or a WebRTC handshake message
+        processMessage: function(msg) {
+            var cnxn;
+
+            // Server responding to a register message. Ignore it if we 
+            // already have a client_id
+            if (!this.registered) {
+                if (msg.type === 'register') {
+                    this.client_id = msg.client_id
+                    this.registered = true
+
+                    console.log("Peer: register with server ID", this.client_id);
+                    this.announce()
+                    this.trigger('registered', msg)
+
+                } else {
+                    this.register();
+                }
+                
+            } else {
+                // WebRTC handshake message handling
+                cnxn = this.findConnection(msg.client_id);
+
+                // A slave is offering to set up a new connection. Respond.
+                if (msg.type === 'offer') {
+                    if (cnxn == null) {
+                        var cnxn = this.newConnection(msg.client_id, this.client_id, false);
+                        this.addConnection(cnxn);
+                    } 
+                    // Respond to offers even if already established connection
+                    cnxn.respondToOffer(msg);
+                    console.log('Peer: Responding to new offer:', msg);
+
+                // A new slave connected to the swarm. Send it an offer.
+                } else if (msg.type == 'announce') {
+                    cnxn = cnxn || this.newConnection(msg.client_id, this.client_id, true)
+                    this.addConnection(cnxn);
+                    
+                // The other peer responded to our offer. Store its session description.
+                // This will also cause the browser to begin sending ICE candidates.
+                } else if (msg.type == 'answer') {
+                    console.log("Peer: Received answer from a peer");
+                    cnxn.answer(msg);
+
+                // A new ICE candidate. Put it in the freezer, ho-ho
+                } else if (msg.type === 'candidate') {
+                    cnxn.addCandidate(msg);
+
+                // The remote peer closed its connection so clean up
+                } else if (msg.type === 'bye') {
+                    console.log('Peer: Closed connection to peer')
+                    cnxn.close()
+                    this.removeConnection(cnxn)
+                } 
+            }
         },
 
         // Initialize WebSocket connection.  WebSocket is used to exchange 
@@ -66,7 +131,6 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
         },
 
         // Register with the server. The server will return a client_id.
-        // See Master and Slave's `processMessage`
         register: function() {
             this.sendSocketMessage({
                 type: "register",
@@ -241,5 +305,6 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
         },
     }, Backbone.Events));
 
-    return Peer;
+    _.extend(Peer, Backbone.Events)
+    return Peer
 });

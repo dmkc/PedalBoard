@@ -74,7 +74,7 @@ define(
                     'click #stop_input'       : 'stopInput'
                 },
 
-                init: function(newSession) {
+                init: function() {
                     this.controller = PedalBoard.PedalBoard.init()
                     this.dom = {
                         pedals: this.$('#pedals')

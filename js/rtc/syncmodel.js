@@ -1,5 +1,5 @@
 // SyncModel is a subclass of Backbone.Model that allows 
-define(['backbone', 'util'], function(Backbone, util) {
+define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
     var peers = {},
         subscriptions = {},
 
@@ -46,17 +46,16 @@ define(['backbone', 'util'], function(Backbone, util) {
         modelMap: {},
         rootModel: null,
 
-        init: function(peer) {
+        init: function() {
             var that = this
 
-            if(!peer) throw "SyncRouter needs to be initiated with a Peer node"
+            this.peer = new Peer()
 
             // RootModel is where we store references to all collectons
             this.initialized = false
-            this.rootModel = new RootModel({id: '_root'})
-            this.rootModel.set('_collections', [], {noBroadcast: true}) 
+            this.rootModel = RootModel.request('_root')
+            this.rootModel.set('_collections', [], {silent: true}) 
 
-            this.peer = peer;
             this.peer.on('data_channel_message', 
                          util.proxy(this.dataChannelCallback, this)
                         );
@@ -66,9 +65,15 @@ define(['backbone', 'util'], function(Backbone, util) {
                 // was successful. Otherwise, wait for the first data channel
                 // to be opened
                 console.log('SyncRouter: registered', msg)
-                if(msg.client_count > 1) return
-                this.initialized = true
-                this.trigger('init')
+                if(msg.client_count == 1) {
+                    this.initialized = true
+                    this.rootModel.sync()
+                }
+                this.rootModel.once('sync', function(){
+                    console.log('SyncRouter: root model synchronized', 
+                                that.rootModel)
+                    that.trigger('init')
+                })
             }, this))
 
             // Remove all connections before quitting
@@ -105,13 +110,8 @@ define(['backbone', 'util'], function(Backbone, util) {
 
                 // Model already in the pool
                 if(model != null) {
-                    // Only master can broadcast its collection list
-                    if(msg.type == 'sync_full' && msg.body.id == '_root' && 
-                       this.peer.master)
-                        return
-
                     model.set(msg.body.data, {
-                        noBroadcast: true
+                        silent: true
                     });
 
                     model.trigger('sync', model)
@@ -133,10 +133,6 @@ define(['backbone', 'util'], function(Backbone, util) {
                             this.makeMsg(model)
                         );
                     }
-
-                    this.trigger('model_sync', {
-                        model: model
-                    });
                 }
 
             // Another peer requesting full data dump of model
@@ -159,9 +155,8 @@ define(['backbone', 'util'], function(Backbone, util) {
         },
 
         dataChannelState: function(e) {
-            // If this is a master node, send own root model to all the 
-            // connected slaves.
-            if (e.state == 'open' && this.peer.master) {
+            // New data channel. Send peer the root model.
+            if (e.state == 'open') {
                 this.peer.sendToAll(
                     'sync_full',
                     SyncRouter.makeMsg(SyncRouter.rootModel, true)
@@ -174,15 +169,11 @@ define(['backbone', 'util'], function(Backbone, util) {
     },
     
     changeCallback = function changeCallback(eventName, target, opts) {
-        var uninteresting = ['request', 'sync', 'invalid', 'route'],
-            opts = util.extend({
-                    noBroadcast: false
-                }, opts);
+        var uninteresting = ['request', 'sync', 'invalid', 'route'] 
 
         // Broadcast all interesting non-sync originating events
         if (uninteresting.indexOf(eventName) > -1 ||
-            eventName.indexOf(':') >= 0 || 
-            opts.noBroadcast) {
+            eventName.indexOf(':') >= 0 ) {
             return;
         }
         try {
