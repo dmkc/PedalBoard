@@ -44,14 +44,22 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
         // Map model names to class names for re-instantiation on other clients
         modelMap: {},
         rootModel: null,
+        // State machine for connection initialization
+        states: {
+            START: 0,
+            REGISTERED: 1,
+            INITIALIZING: 2,
+            INITIALIZED: 3,
+        },
+        state: 0,
 
         init: function() {
             var that = this
 
             this.peer = new Peer()
 
+            // If true, then the root model is in sync with swarm. 
             // RootModel is where we store references to all collectons
-            this.initialized = false
             this.rootModel = RootModel.request('_root')
             this.rootModel.set('_collections', [], {silent: true}) 
 
@@ -59,20 +67,27 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
                          util.proxy(this.dataChannelCallback, this)
                         );
             this.peer.on('data_channel_state', util.proxy(this.dataChannelState, this));
+
+            // Once registered, set up root model syncing
             this.peer.once('registered', _.bind(function(msg){
-                // If we're the only client in the session, then initialization
-                // was successful. Otherwise, wait for the first data channel
-                // to be opened
                 console.log('SyncRouter: registered', msg)
-                if(msg.client_count == 1) {
-                    this.initialized = true
-                    this.rootModel.sync()
-                }
+                this.state = this.states.REGISTERED
+
+                // SyncRouter is initialized once the root model is in sync
                 this.rootModel.once('sync', function(){
                     console.log('SyncRouter: root model synchronized', 
                                 that.rootModel)
+                    that.state = that.states.INITIALIZED
                     that.trigger('init')
                 })
+
+                // If we're the only client in the session, then initialization
+                // was successful, and we don't need to sync the root model. 
+                // Otherwise, rootModel will sync itself upon the first
+                // established peer connection
+                if(msg.client_count == 1) {
+                    this.rootModel.trigger('sync')
+                }
             }, this))
 
             // Remove all connections before quitting
@@ -102,7 +117,7 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
                 subscr,
                 model = ModelPool.get(msg.body.name, msg.body.id)
 
-            console.log("Peer: New DC message", msg.type, msg)
+            console.log("SyncRouter: New message", msg)
 
             if (msg.type == 'change' || 
                 msg.type == 'change_full') 
@@ -113,6 +128,7 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
                         broadcast: false
                     });
 
+                    // Received a full data dump. Notify model subscribers.
                     if(msg.type == 'change_full') {
                         model.trigger('sync', model)
                     }
@@ -142,7 +158,7 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
                 // Model already in the pool
                 if(model == null) {
                     // TODO: add response type for failed model requests
-                    console.error('BB: Request to sync a missing model', msg);
+                    console.error('SyncRouter: Request for dump of an unknown model', msg);
                     return
                 }
 
@@ -150,25 +166,24 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
                     connection,
                     'change_full',
                     this.makeMsg(model, true)
-                );
+                )
+
             // New model added to a collection
             } else if (msg.type == 'add' || msg.type == 'remove') {
-                SyncLList.findHead(model).trigger(msg.type, model, {
+                SyncLList.head(model).trigger(msg.type, model, {
                     broadcast: false
                 })
             }
         },
 
         dataChannelState: function(e) {
-            // New data channel. Send peer the root model.
-            if (e.state == 'open') {
-                this.peer.sendToAll(
-                    'change_full',
-                    SyncRouter.makeMsg(SyncRouter.rootModel, true)
-                )
+            // Our first peer connection. Sync the root model
+            if (e.state == 'open' && 
+                this.state == this.states.REGISTERED) 
+            {
+                this.rootModel.sync()
+                this.state = this.states.INITIALIZING
             }
-            if(!this.initialized)
-                this.trigger('init')
         },
         
     },
@@ -183,10 +198,7 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
                 console.log('SyncModel: updated linked list')
             }
         },
-        sync: function(){
-            // If there are other peers in the swarm, we should be connected
-            // to one at this point. Otherwise, we're the only peer and 
-            // have no one to sync with.
+        sync: function(connection){
             if(SyncRouter.peer.connections.length === 0) {
                 this.trigger('sync')
             } else {
@@ -214,42 +226,18 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
         },
 
         // Linked list methods
-        _nextNode: function(next){
-            var nextNode
-
-            if(next !== undefined) {
-                this.set('_next', {
-                    name: next.name,
-                    id: next.id
-                });
-                this._next = next;
-            } else {
-                nextNode = this.get('_next')
-                // Update reference to the next model in the collection
-                if(nextNode && this._next == null) {
-                    this._next = ModelPool.get(nextNode.name, nextNode.id)
-                }
-                return this._next;
-            }
+        // TODO: Move these to SyncLList node
+        next: function(next){
+            var nextNode = this.get('_next')
+            if(!nextNode) return null
+            return ModelPool.get(nextNode.name, nextNode.id)
         },
 
-        _prevNode: function(prev){
-            var prevNode
-
-            if(prev !== undefined) {
-                this.set('_prev', {
-                    name: prev.name,
-                    id: prev.id
-                })
-                this._prev = prev
-            } else {
-                prevNode = this.get('_prev')
-                // Update reference to the previous model in the collection
-                if(prevNode && this._prev == null) {
-                    this._prev = ModelPool.get(prevNode.name, prevNode.id)
-                }
-                return this._prev;
-            }
+        prev: function(prev){
+            var prevNode = this.get('_prev')
+            if(!prevNode) return null
+            // Update reference to the previous model in the collection
+            return ModelPool.get(prevNode.name, prevNode.id)
         },
         changeCallback: function changeCallback(eventName, target, opts) {
             var uninteresting = ['request', 'sync', 'invalid', 'route'],
@@ -301,8 +289,6 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
     }
 
     // A synchronized linked list
-    // TODO: comments
-    // TODO: support for 'remove', 'add' events.
     SyncLList = SyncModel.extend({
         name: 'SyncLList',
 
@@ -324,18 +310,18 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
 
         // Add a model to collection's linked list
         add: function(model) {
-            var tail = this._tail || this
+            var tail = SyncLList.tail(this)
 
             if(!model.attributes)
-                throw "Object not an instance of SyncModel"
+                throw "SyncLList: Object not an instance of SyncModel"
 
             if (model.get('_next') || model.get('_prev')) {
                 console.error("SyncLList: This model is already in a collection")
                 return
             }
 
-            tail._nextNode(model)
-            model._prevNode(tail)
+            tail.set('_next', { id: model.id, name: model.name })
+            model.set('_prev', { id: tail.id, name: tail.name })
             model._llist = this
             this._tail = model
             this.trigger('add', model)
@@ -344,17 +330,33 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
 
         // Remove a model from collection's linked list
         remove: function(model) {
-            var cur = this._nextNode(), prev, next
-            while(cur !== model) cur = cur._nextNode()
+            var cur = this.next(), prev, next
+            while(cur !== model) cur = cur.next()
             if (cur === null) return null
 
-            prev = cur._prevNode()
-            next = cur._nextNode()
-            prev._nextNode(next)
-            next._prevNode(prev)
+            prev = cur.prev()
+            next = cur.next()
+            if(next) {
+                prev.set('_next', { id: next.id, name: next.name })
+                next.set('_prev', { id: prev.id, name: prev.name })
+            } else {
+                prev.set('_next', null)
+                prev._next = undefined
+            }
+            model.set({'_prev': null, '_next': null})
+            model._next = model._prev = undefined
 
             this.trigger('remove', model)
             return model
+        },
+
+        size: function() {
+            var i=0, cur = this
+            while((next = cur.next()) !== null) {
+                cur = next
+                i++
+            }
+            return i
         },
 
         empty: function() {
@@ -388,15 +390,24 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
             SyncModel.prototype.sync.apply(this,arguments)
         },
     });
-    SyncLList.findHead = function(model) {
-        if(model._llist) return model._llist
+    
+    // Class methods for working with linked lists
+    _.extend(SyncLList, {
+        head : function(cur) {
+            if(cur._llist) return cur._llist
 
-        var cur = model
-        while(cur._prevNode() != null) cur = cur._prevNode()
-        model._llist = cur
-        return cur
-    }
+            var prev
+            while((prev = cur.prev()) !== null) cur = prev
+            return cur
+        },
 
+        tail : function(cur) {
+            var next
+            while((next = cur.next()) !== null) cur = next
+            return cur
+        },
+
+    })
 
     // A magic model that keeps track of all collections in the swarm
     var RootModel = SyncModel.extend({

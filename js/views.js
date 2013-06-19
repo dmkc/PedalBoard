@@ -67,8 +67,6 @@ define(
                 dom: {},
                 // TODO: switch to touch/tap events with zepto
                 events: {
-                    'click #add_compressor'   : 'addPedal',
-                    'click #add_stereochorus' : 'addPedal',
                     'click #play_sample_0'    : 'playSample',
                     'click #live_input'       : 'liveInput',
                     'click #stop_input'       : 'stopInput'
@@ -79,11 +77,15 @@ define(
                     this.dom = {
                         pedals: this.$('#pedals')
                     }
+                    this.$('#add_compressor, #add_stereochorus')
+                        .on('click', _.bind(this.addPedal,this))
+
                     this.views = [];
+                    // Set up the pedals linked list
                     this.pedalList = Backbone.SyncLList.request('pedalList')
                     this.pedalList.once('sync', _.bind(this.initDone,this))
-                    this.pedalList.on('add', function(){
-                        console.log('PedalList: new item added')
+                    this.pedalList.on('add', function(e,model){
+                        console.log('PedalList: new pedal added')
                     })
                     this.pedalList.sync()
 
@@ -97,23 +99,27 @@ define(
 
                 addPedal: function(e) {
                     var view, 
-                        params; 
+                        model,
+                        that = this
 
                     if (e.target.id == 'add_compressor') {
-                        params = new Models.CompressorModel();
+                        model = new Models.CompressorModel();
 
                         view = new CompressorView({
-                            model: params
+                            model: model
                         }).init();
                     } else if (e.target.id == 'add_stereochorus') {
-                        params = new Models.StereoChorusModel();
+                        model = new Models.StereoChorusModel();
 
                         view = new StereoChorusView({
-                            model: params
+                            model: model
                         }).init();
                     }
+                    model.on('destroy', function(){
+                        that.pedalList.remove(model)
+                    })
                     this.dom.pedals.append(view.$el);
-                    this.pedalList.add(params)
+                    this.pedalList.add(model)
                 },
 
                 playSample: function(e) {
