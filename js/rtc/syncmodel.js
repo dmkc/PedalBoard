@@ -377,8 +377,9 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
                 }
                 // Reached end of linked list
                 if (!next) {
+                    // TODO: Remove sync_list when linked list nodes are separated from models
                     console.log("SyncLList: sync reached end of list", this)
-                    linkedList.trigger('sync', this)
+                    linkedList.trigger('sync_list', this)
                     return
                 }
 

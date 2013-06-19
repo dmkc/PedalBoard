@@ -17,6 +17,7 @@ define(
                     "change": "changeHandler",
                 },
 
+                // Set model in response to changes in UI
                 changeHandler: function(e) {
                     var node = e.target,
                         val;
@@ -29,14 +30,26 @@ define(
                     this.model.set(e.target.className, val);
                 },
 
+                // Update UI in response to model
+                modelChange: function(model) {
+                    var attrs = model.changedAttributes()
+                    this.restore(attrs)
+                },
+
+                // Restore UI settings from a model
+                restore: function(atrs) {
+                    var attrs = attrs || this.model.attributes
+
+                    for(var a in attrs) {
+                        this.$('.' + a).val(attrs[a])
+                    }
+                },
+
                 destroy: function() {
                     this.$el.remove();
                     this.model.destroy();
                 },
 
-                modelChange: function(model) {
-                    console.log('PEDAL VIEW: model param change');
-                },
             }),
 
             CompressorView = PedalView.extend({
@@ -69,7 +82,11 @@ define(
                 events: {
                     'click #play_sample_0'    : 'playSample',
                     'click #live_input'       : 'liveInput',
-                    'click #stop_input'       : 'stopInput'
+                    'click #stop_input'       : 'stopInput',
+                    /*
+                    'click #add_compressor'   : 'addPedal',
+                    'click #add_stereochorus'   : 'addPedal',
+                    */
                 },
 
                 init: function() {
@@ -78,48 +95,63 @@ define(
                         pedals: this.$('#pedals')
                     }
                     this.$('#add_compressor, #add_stereochorus')
-                        .on('click', _.bind(this.addPedal,this))
+                        .on('click', _.bind(function(e){
+                            this.addPedal(e.target.id.substr(4))
+                        },this))
 
                     this.views = [];
                     // Set up the pedals linked list
                     this.pedalList = Backbone.SyncLList.request('pedalList')
-                    this.pedalList.once('sync', _.bind(this.initDone,this))
+                    this.pedalList.once('sync_list', _.bind(this.restorePedals,this))
                     this.pedalList.on('add', function(e,model){
                         console.log('PedalList: new pedal added')
                     })
                     this.pedalList.sync()
 
-                    window.PedalList = this.pedalList
                     return this
                 },
 
-                initDone: function() {
-                    console.log("PedalView: initialized pedal list")
+                // Set up pedals from linked list 
+                restorePedals: function() {
+                    var cur = this.pedalList.next(), view
+
+                    while(cur != null) {
+                        view = this.addPedal(
+                            cur.name.substr(0, cur.name.length-5).toLowerCase(),
+                            cur)
+                        view.restore()
+                        cur = cur.next() 
+                    }
                 },
 
-                addPedal: function(e) {
+                addPedal: function(name, existing_model) {
                     var view, 
                         model,
                         that = this
 
-                    if (e.target.id == 'add_compressor') {
-                        model = new Models.CompressorModel();
+                    if (name == 'compressor') {
+                        model = existing_model || new Models.CompressorModel()
 
                         view = new CompressorView({
                             model: model
-                        }).init();
-                    } else if (e.target.id == 'add_stereochorus') {
-                        model = new Models.StereoChorusModel();
+                        }).init()
+                    } else if (name == 'stereochorus') {
+                        model = existing_model || new Models.StereoChorusModel()
 
                         view = new StereoChorusView({
                             model: model
-                        }).init();
+                        }).init()
                     }
+                    /*
                     model.on('destroy', function(){
                         that.pedalList.remove(model)
                     })
+                    */
                     this.dom.pedals.append(view.$el);
-                    this.pedalList.add(model)
+                    if (!existing_model)
+                        this.pedalList.add(model)
+
+                    return view
                 },
 
                 playSample: function(e) {
