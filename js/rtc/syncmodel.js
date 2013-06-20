@@ -170,9 +170,7 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
 
             // New model added to a collection
             } else if (msg.type == 'add' || msg.type == 'remove') {
-                SyncLList.head(model).trigger(msg.type, model, {
-                    broadcast: false
-                })
+                SyncLList.head(model).trigger(msg.type, model, {noBroadcast:true})
             }
         },
 
@@ -239,6 +237,13 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
             // Update reference to the previous model in the collection
             return ModelPool.get(prevNode.name, prevNode.id)
         },
+        
+        trigger: function(eventType, model, opts) {
+            var opts = _.extend({ noBroadcast: false }, opts)
+            if(!opts.noBroadcast)
+                Backbone.Model.prototype.trigger.apply(this, arguments)
+        },
+
         changeCallback: function changeCallback(eventName, target, opts) {
             var uninteresting = ['request', 'sync', 'invalid', 'route'],
                 opts = _.extend({ broadcast: true },opts)
@@ -309,7 +314,7 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
         },
 
         // Add a model to collection's linked list
-        add: function(model) {
+        add: function(model, opts) {
             var tail = SyncLList.tail(this)
 
             if(!model.attributes)
@@ -324,12 +329,16 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
             model.set('_prev', { id: tail.id, name: tail.name })
             model._llist = this
             this._tail = model
-            this.trigger('add', model)
+
+            // Auto-remove model from list
+            model.on('destroy', _.bind(this.remove, this))
+
+            this.trigger('add', model, opts)
             return model
         },
 
         // Remove a model from collection's linked list
-        remove: function(model) {
+        remove: function(model, opts) {
             var cur = this.next(), prev, next
             while(cur !== model) cur = cur.next()
             if (cur === null) return null
@@ -346,7 +355,7 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
             model.set({'_prev': null, '_next': null})
             model._next = model._prev = undefined
 
-            this.trigger('remove', model)
+            this.trigger('remove', model, opts)
             return model
         },
 

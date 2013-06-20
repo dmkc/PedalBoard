@@ -1,6 +1,6 @@
 define(
-    ['util', 'rtc/syncmodel', 'audio/pedals', 'audio/pedalboard', 'models'], 
-    function(util, Backbone, Pedals, PedalBoard, Models) {
+    ['rtc/syncmodel', 'audio/pedals', 'audio/pedalboard', 'models'], 
+    function(Backbone, Pedals, PedalBoard, Models) {
         // A generic pedal that notifies its model of parameter changes
         var PedalView = Backbone.View.extend({
                 el: function() {
@@ -9,7 +9,10 @@ define(
 
                 init: function() {
                     this.model.on('change', this.modelChange, this);
-                    this.$('.remove').on('click', util.proxy(this.destroy,this));
+                    this.model.on('destroy', _.bind(this.destroy,this));
+                    this.$('.remove').on('click', _.bind(function(){
+                        this.model.destroy()}, this));
+
                     return this;
                 },
 
@@ -47,7 +50,6 @@ define(
 
                 destroy: function() {
                     this.$el.remove();
-                    this.model.destroy();
                 },
 
             }),
@@ -96,16 +98,14 @@ define(
                     }
                     this.$('#add_compressor, #add_stereochorus')
                         .on('click', _.bind(function(e){
-                            this.addPedal(e.target.id.substr(4))
+                            this.addPedalModel(e.target.id.substr(4))
                         },this))
 
                     this.views = [];
                     // Set up the pedals linked list
                     this.pedalList = Backbone.SyncLList.request('pedalList')
                     this.pedalList.once('sync_list', _.bind(this.restorePedals,this))
-                    this.pedalList.on('add', function(e,model){
-                        console.log('PedalList: new pedal added')
-                    })
+                    this.pedalList.on('add', _.bind(this.addPedalView,this))
                     this.pedalList.sync()
 
                     return this
@@ -116,40 +116,43 @@ define(
                     var cur = this.pedalList.next(), view
 
                     while(cur != null) {
-                        view = this.addPedal(
-                            cur.name.substr(0, cur.name.length-5).toLowerCase(),
-                            cur)
+                        view = this.addPedalView(cur)
                         view.restore()
                         cur = cur.next() 
                     }
                 },
 
-                addPedal: function(name, existing_model) {
+                addPedalModel: function(name) {
+                    var model
+
+                    if (name == 'compressor') {
+                        model = new Models.CompressorModel()
+                    } else if (name == 'stereochorus') {
+                        model = new Models.StereoChorusModel()
+                    }
+                    this.pedalList.add(model)
+                    return model
+                },
+
+
+                // TODO: this screams declarative. 
+                // TODO: Fix ugly addPedalView/Model split
+                addPedalView: function(model) {
                     var view, 
-                        model,
+                        // Figure out view name from model name
+                        name = model.name.substr(0, model.name.length-5).toLowerCase(),
                         that = this
 
                     if (name == 'compressor') {
-                        model = existing_model || new Models.CompressorModel()
-
                         view = new CompressorView({
                             model: model
                         }).init()
                     } else if (name == 'stereochorus') {
-                        model = existing_model || new Models.StereoChorusModel()
-
                         view = new StereoChorusView({
                             model: model
                         }).init()
                     }
-                    /*
-                    model.on('destroy', function(){
-                        that.pedalList.remove(model)
-                    })
-                    */
                     this.dom.pedals.append(view.$el);
-                    if (!existing_model)
-                        this.pedalList.add(model)
 
                     return view
                 },
