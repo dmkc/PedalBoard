@@ -1,18 +1,15 @@
 var WebSocketServer = require('websocket').server;
 var http = require('http');
 var clients = [],
-    // TODO: hash or randomize IDs
     connectionCount = 0, 
     NEW_CLIENT_ID = -1;
 
-var server = http.createServer(function(request, response) {
-    // process HTTP request. Since we're writing just WebSockets server
-    // we don't have to implement anything.
-});
+var server = http.createServer(function(request, response) {});
 server.listen(1337, function() {
-  console.log((new Date()) + " Server is listening on port 1337");
+  console.log("Server listening on port 1337");
 });
 
+// Set up WebSocket server
 wsServer = new WebSocketServer({
     httpServer: server
 });
@@ -26,13 +23,8 @@ function genSessionId() {
     });
 }
 
-function addToSession(){
-}
-
 function errorHandler(err){
-    if(err){
-        console.log('Connection error. ');
-    }
+    console.error('Connection error: ', err);
 }
 
 function newClientID(){
@@ -48,30 +40,30 @@ function echoMessage(sid, message, to) {
     })
 }
 
-/*
- * Handle incoming requests.
- */
 wsServer.on('request', function(request) {
     var connection = request.accept(null, request.origin);
 
-    console.log(Date(),'New connection from', connection.remoteAddress);
+    console.log('New connection:', connection.remoteAddress);
     connection.client_id = NEW_CLIENT_ID
 
-    //clients.push(connection)
     console.log('Total clients:', clients.length)
     
+    // Process WebSocket messages
     connection.on('message', function(message) {
         var sendTo = [], 
             sid, client_id, msg
 
         // Ignore malformed messages
-        if (message.type !== 'utf8') return
+        if (message.type !== 'utf8') {
+            console.log('Non-UTF message', this.remoteAddress)
+            return
+        }
 
         try {
             msg = JSON.parse(message.utf8Data);
         } catch(e) {
-            console.log("Non-JSON payload from:", this.remoteAddress);
-            return;
+            console.error("Non-JSON payload from:", this.remoteAddress)
+            return
         }
 
         sid = msg.session_id
@@ -80,7 +72,8 @@ wsServer.on('request', function(request) {
         // Client (re-)registration
         if (msg.type == "register") {
             // Create new session and client ID
-            if (client_id <= NEW_CLIENT_ID || isNaN(client_id)) {
+            if (client_id <= NEW_CLIENT_ID || isNaN(client_id)) 
+            {
                 client_id = newClientID()
                 sid = Session.create()
                 msg.session_id = sid
@@ -96,7 +89,7 @@ wsServer.on('request', function(request) {
                 if(!sid ||
                   !Session.exists(sid) ||
                   !Session.clientInSession(sid, client_id)) {
-                    console.error('Hack: Existing client ID without a valid session ID', 
+                    console.error('A client ID given without a valid session ID', 
                                   this.remoteAddress)
                     this.close()
                     return
@@ -111,6 +104,7 @@ wsServer.on('request', function(request) {
 
             }
             connection.client_id = client_id
+            connection.session_id = sid
             Session.addConnection(sid, client_id, connection)
             // Include current number of clients so peer knows if it's alone
             msg.client_count = Object.keys(Session.get(sid)).length
@@ -125,6 +119,7 @@ wsServer.on('request', function(request) {
             }
 
             sendTo = [msg.dest]
+
         // Broadcast message to all connected clients
         } else {
             if(!sid || !Session.exists(sid) || !Session.clientInSession(sid, client_id)) {
@@ -142,12 +137,17 @@ wsServer.on('request', function(request) {
 
         // sign message with client ID
         msg.client_id = this.client_id;
-        echoMessage(sid, JSON.stringify(msg), sendTo);
+        echoMessage(sid, JSON.stringify(msg), sendTo)
     })
 
-    connection.on('close', function(connection) {
-        clients.splice(clients.indexOf(this), 1);
-        console.log("Peer disconnected.", this.client_id);        
+    // Client disconnected. Clean up memory.
+    connection.on('close', function() {
+        console.log("Peer disconnected. ID:", 
+                    this.client_id, 
+                    this.remoteAddress);        
+        var session = Session.get(this.session_id)
+        if (!session) return
+        delete session[this.client_id]
     });
 });
 
@@ -162,6 +162,7 @@ Session = {
         return uuid
     },
 
+    // Get hash of clients in a given session
     get: function(session_id) {
         return this.sessions[session_id]
     },
@@ -181,6 +182,7 @@ Session = {
         return session[client_id]
     },
 
+    // Return true if a client ID belongs to a particular session
     clientInSession: function(session_id, client_id) {
         var session = this.get(session_id)
         if (!session) 
@@ -189,6 +191,7 @@ Session = {
         return session[client_id] !== undefined
     },
 
+    // Execute a function for each connection in a particular session
     each: function(session_id, func) {
         var session = this.get(session_id)
         if (!session) 
@@ -201,22 +204,20 @@ Session = {
 
 }
 
-
-
 // Util ////////////////
-var oconsole = console
-// Add date stamping to console functions
+var oconsole = require('console')
 
-console = {
+// Add date stamping to console functions
+var console = {
     log: function() {
         args = Array.prototype.slice.call(arguments);
         args.unshift(Date()) 
-        return oconsole.log.apply(this, args)
+        return oconsole.log.apply(oconsole, args)
     },
 
     error: function() {
         args = Array.prototype.slice.call(arguments);
         args.unshift(Date()) 
-        return oconsole.error.apply(this,args)
+        return oconsole.error.apply(oconsole,args)
     }
 }
