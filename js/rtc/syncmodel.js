@@ -54,10 +54,11 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
         },
         state: 0,
 
-        init: function() {
+        init: function(session_id) {
             var that = this
 
             this.peer = new Peer()
+            this.peer.session_id = session_id
 
             // If true, then the root model is in sync with swarm. 
             // RootModel is where we store references to all collectons

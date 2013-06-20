@@ -69,6 +69,7 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
                 if (msg.type === 'offer') {
                     if (cnxn == null) {
                         var cnxn = this.newConnection(msg.client_id, this.client_id, false);
+                        cnxn.session_id = this.session_id
                         this.addConnection(cnxn);
                     } 
                     // Respond to offers even if already established connection
@@ -78,6 +79,7 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
                 // A new peer connected to the swarm. Send it an offer.
                 } else if (msg.type == 'announce') {
                     cnxn = cnxn || this.newConnection(msg.client_id, this.client_id, true)
+                    cnxn.session_id = this.session_id
                     this.addConnection(cnxn);
                     
                 // The other peer responded to our offer. Store its session description.

@@ -104,8 +104,9 @@ define(['util', 'rtc/socket', 'underscore', 'backbone'],
 
         sendMessage: function(msg) {
             // TODO: should rtc know anything about client_id's?
-            msg.from = this.local_id
+            msg.client_id = this.local_id
             msg.dest = this.client_id
+            msg.session_id = this.session_id
             this.socket.send(JSON.stringify(msg));
         },
 

@@ -24,7 +24,7 @@ function genSessionId() {
 }
 
 function errorHandler(err){
-    console.error('Connection error: ', err);
+    if (err) console.error('Connection error: ', err);
 }
 
 function newClientID(){
@@ -32,12 +32,18 @@ function newClientID(){
     return connectionCount
 }
 
-function echoMessage(sid, message, to) {
-    Session.each(sid, function(connection) {
-        if(to.indexOf(connection.client_id) < 0) return
-        console.log('Sending msg to', connection.client_id)
-        connection.send(message, errorHandler)
-    })
+function echoMessage(sid, message, sendTo) {
+    console.log("Gonna echo some stuff", sendTo)
+    var clients = Session.get(sid), connection
+    for(var c in clients) {
+        connection = clients[c]
+        if(sendTo.indexOf(connection.client_id.toString()) < 0){
+            console.log('Skipping', connection.client_id, ', not in', sendTo)
+        } else {
+            console.log('Sending msg to', connection.client_id)
+            connection.send(message, errorHandler)
+        }
+    }
 }
 
 wsServer.on('request', function(request) {
@@ -51,7 +57,7 @@ wsServer.on('request', function(request) {
     // Process WebSocket messages
     connection.on('message', function(message) {
         var sendTo = [], 
-            sid, client_id, msg
+            sid, client_id, msg, session
 
         // Ignore malformed messages
         if (message.type !== 'utf8') {
@@ -72,14 +78,21 @@ wsServer.on('request', function(request) {
         // Client (re-)registration
         if (msg.type == "register") {
             // Create new session and client ID
-            if (client_id <= NEW_CLIENT_ID || isNaN(client_id)) 
+            if ((client_id <= NEW_CLIENT_ID || isNaN(client_id))) 
             {
                 client_id = newClientID()
-                sid = Session.create()
-                msg.session_id = sid
-                Session.addConnection(sid, client_id, connection)
 
-                console.log('New session for', client_id)
+                // Is this a new client trying to join an existing session?
+                if(!sid) {
+                    sid = Session.create()
+                } else {
+                    sid = msg.session_id
+                    if(!Session.exists(sid)) {
+                        console.error("Invalid session ID", this.remoteAddress)
+                        return
+                    }
+                }
+                console.log('Client', client_id, 'joined', sid)
 
             // An existing client_id provided
             } else {
@@ -105,39 +118,35 @@ wsServer.on('request', function(request) {
             }
             connection.client_id = client_id
             connection.session_id = sid
+            msg.session_id = sid
             Session.addConnection(sid, client_id, connection)
             // Include current number of clients so peer knows if it's alone
             msg.client_count = Object.keys(Session.get(sid)).length
-            sendTo = [client_id]
+            sendTo = [client_id.toString()]
             
-        // Send message to a specific session ID
-        // TODO: verify both from and dest are in the right session
-        } else if (msg.dest > 0 && msg.from > 0) {
-            if(!sid || !Session.exists(sid) || !Session.clientInSession(sid, client_id)) {
-                console.error("DM with invalid session or client ID", this.remoteAddress)
-                return
-            }
-
-            sendTo = [msg.dest]
-
         // Broadcast message to all connected clients
         } else {
             if(!sid || !Session.exists(sid) || !Session.clientInSession(sid, client_id)) {
-                console.error("Broadcast with invalid session or client ID", this.remoteAddress, msg)
+                console.error("Attempt to send with invalid session or client ID", 
+                              this.client_id, 
+                              msg.type)
                 return
             }
+            // Send message to a specific session ID or to all in the session
+            if(msg.dest) {
+                sendTo = [msg.dest.toString()]
+            } else {
+                sendTo = Object.keys(Session.get(sid))
+                sendTo.splice(sendTo.indexOf(connection.client_id.toString()), 1)
+            }
 
-            console.log('Broadcast', msg.type, "from:",
-                    connection.client_id);
-            
-            // Broadcast to everyone except for ourselves
-            sendTo = Object.keys(Session.get(sid))
-            sendTo.shift(sendTo.indexOf(client_id, 1))
+            console.log('Sending', msg.type, "from:",
+                    connection.client_id, "to", sendTo)
         }
 
         // sign message with client ID
         msg.client_id = this.client_id;
-        echoMessage(sid, JSON.stringify(msg), sendTo)
+        echoMessage(sid, JSON.stringify(msg), sendTo.slice(0))
     })
 
     // Client disconnected. Clean up memory.
@@ -192,13 +201,13 @@ Session = {
     },
 
     // Execute a function for each connection in a particular session
-    each: function(session_id, func) {
+    each: function(session_id, func, opts) {
         var session = this.get(session_id)
         if (!session) 
             return null
         else 
             for(var c in session) {
-                func(session[c])
+                func(session[c], opts)
             }
     }
 
