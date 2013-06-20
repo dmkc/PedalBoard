@@ -15,7 +15,7 @@ define(['util', 'rtc/socket', 'underscore', 'backbone'],
      */
     function RTCConnection(client_id, local_id) {
         this.client_id = client_id || NEW_CLIENT_ID;
-        this.local_id = local_id || NEW_CLIENT_ID;
+        this.local_id = local_id || NEW_CLIENT_ID
         this.cnxn
         this.dataChannel
     }
@@ -104,8 +104,8 @@ define(['util', 'rtc/socket', 'underscore', 'backbone'],
 
         sendMessage: function(msg) {
             // TODO: should rtc know anything about client_id's?
-            msg.from = this.local_id;
-            msg.dest = this.client_id; 
+            msg.from = this.local_id
+            msg.dest = this.client_id
             this.socket.send(JSON.stringify(msg));
         },
 

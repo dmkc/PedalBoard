@@ -45,13 +45,14 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
         // Process an incoming WebSocket message. This is either a control
         // message related to this session, or a WebRTC handshake message
         processMessage: function(msg) {
-            var cnxn;
+            var cnxn = this.findConnection(msg.client_id)
 
             // Server responding to a register message. Ignore it if we 
             // already have a client_id
             if (!this.registered) {
                 if (msg.type === 'register') {
                     this.client_id = msg.client_id
+                    this.session_id = msg.session_id
                     this.registered = true
 
                     console.log("Peer: register with server ID", this.client_id);
@@ -64,7 +65,6 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
                 
             } else {
                 // WebRTC handshake message handling
-                cnxn = this.findConnection(msg.client_id);
 
                 if (msg.type === 'offer') {
                     if (cnxn == null) {
@@ -138,6 +138,7 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
         },
 
         sendSocketMessage: function sendMessage(message) {
+            message.session_id = this.session_id
             var msgString = JSON.stringify(message);
             //console.log("TO WSS:", msgString);
             this.socket.send(msgString);

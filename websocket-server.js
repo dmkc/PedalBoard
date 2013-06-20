@@ -19,7 +19,7 @@ wsServer = new WebSocketServer({
 
 // 1 in 2^^122 chance of collisions.
 // http://stackoverflow.com/a/2117523
-function genUUID() {
+function genSessionId() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
         var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
         return v.toString(16);
@@ -41,8 +41,8 @@ function newClientID(){
 }
 
 function echoMessage(sid, message, to) {
-    console.log('Sending msg to', to)
     Session.each(sid, function(connection) {
+        if(to.indexOf(connection.client_id) < 0) return
         console.log('Sending msg to', connection.client_id)
         connection.send(message, errorHandler)
     })
@@ -69,21 +69,19 @@ wsServer.on('request', function(request) {
 
         try {
             msg = JSON.parse(message.utf8Data);
-            console.log('New message')
         } catch(e) {
             console.log("Non-JSON payload from:", this.remoteAddress);
             return;
         }
 
         sid = msg.session_id
-        client_id = msg.client_id
+        client_id = new Number(msg.client_id)
 
         // Client (re-)registration
         if (msg.type == "register") {
             // Create new session and client ID
             if (client_id <= NEW_CLIENT_ID || isNaN(client_id)) {
-                client_id = connectionCount
-                connectionCount++
+                client_id = newClientID()
                 sid = Session.create()
                 msg.session_id = sid
                 Session.addConnection(sid, client_id, connection)
@@ -96,6 +94,7 @@ wsServer.on('request', function(request) {
                 sid = msg.session_id
 
                 if(!sid ||
+                  !Session.exists(sid) ||
                   !Session.clientInSession(sid, client_id)) {
                     console.error('Hack: Existing client ID without a valid session ID', 
                                   this.remoteAddress)
@@ -120,23 +119,25 @@ wsServer.on('request', function(request) {
         // Send message to a specific session ID
         // TODO: verify both from and dest are in the right session
         } else if (msg.dest > 0 && msg.from > 0) {
-            if(!Session.exists(sid) || !Session.clientInSession(sid, client_id)) {
-                console.error("DM with invaid session or client ID", this.remoteAddress)
+            if(!sid || !Session.exists(sid) || !Session.clientInSession(sid, client_id)) {
+                console.error("DM with invalid session or client ID", this.remoteAddress)
                 return
             }
 
             sendTo = [msg.dest]
         // Broadcast message to all connected clients
         } else {
-            if(!Session.exists(sid) || !Session.clientInSession(sid, client_id)) {
-                console.error("Broadcast with invalid session or client ID", this.remoteAddress)
+            if(!sid || !Session.exists(sid) || !Session.clientInSession(sid, client_id)) {
+                console.error("Broadcast with invalid session or client ID", this.remoteAddress, msg)
                 return
             }
 
             console.log('Broadcast', msg.type, "from:",
                     connection.client_id);
             
+            // Broadcast to everyone except for ourselves
             sendTo = Object.keys(Session.get(sid))
+            sendTo.shift(sendTo.indexOf(client_id, 1))
         }
 
         // sign message with client ID
@@ -156,7 +157,7 @@ Session = {
     sessions : {},
 
     create: function(){
-        var uuid = genUUID()
+        var uuid = genSessionId()
         this.sessions[uuid] = {}
         return uuid
     },
@@ -166,7 +167,7 @@ Session = {
     },
 
     exists: function(session_id) {
-        return this.get(session_id) === undefined
+        return this.get(session_id) !== undefined
     },
 
     addConnection: function(session_id, client_id, connection) {
@@ -174,11 +175,18 @@ Session = {
     },
 
     getConnection: function(sessions_id, client_id) {
-        return this.sessions[session_id][client_id]
+        var session = this.get(session_id)
+        if (!session) 
+            return null
+        return session[client_id]
     },
 
     clientInSession: function(session_id, client_id) {
-        return this.sessions[session_id][client_id] !== undefined
+        var session = this.get(session_id)
+        if (!session) 
+            return null
+
+        return session[client_id] !== undefined
     },
 
     each: function(session_id, func) {
