@@ -7,7 +7,8 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
     // Data structure for keeping track of model instances and their
     // subscriptions. 
     ModelPool = {
-        // TODO: clean up destroyed models and dead clients
+        // TODO: clean up destroyed clients
+        // TODO: Is this necessary given rootModel? Not if llist is a binary tree..
         add: function(model) {
             var subscr,
                 curModel;
@@ -170,7 +171,10 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
 
             // New model added to a collection
             } else if (msg.type == 'add' || msg.type == 'remove') {
-                SyncLList.head(model).trigger(msg.type, model, {noBroadcast:true})
+                SyncLList.head(model).trigger(msg.type, model, {broadcast:false})
+            } else if (msg.type == 'destroy') {
+                if(model != null)
+                    model.trigger('destroy', this, {broadcast:false})
             }
         },
 
@@ -238,12 +242,6 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
             return ModelPool.get(prevNode.name, prevNode.id)
         },
         
-        trigger: function(eventType, model, opts) {
-            var opts = _.extend({ noBroadcast: false }, opts)
-            if(!opts.noBroadcast)
-                Backbone.Model.prototype.trigger.apply(this, arguments)
-        },
-
         changeCallback: function changeCallback(eventName, target, opts) {
             var uninteresting = ['request', 'sync', 'invalid', 'route'],
                 opts = _.extend({ broadcast: true },opts)
@@ -340,7 +338,7 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
         // Remove a model from collection's linked list
         remove: function(model, opts) {
             var cur = this.next(), prev, next
-            while(cur !== model) cur = cur.next()
+            while(cur !== null && cur != model) cur = cur.next()
             if (cur === null) return null
 
             prev = cur.prev()
