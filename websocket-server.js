@@ -33,7 +33,6 @@ function newClientID(){
 }
 
 function echoMessage(sid, message, sendTo) {
-    console.log("Gonna echo some stuff", sendTo)
     var clients = Session.get(sid), connection
     for(var c in clients) {
         connection = clients[c]

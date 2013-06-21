@@ -235,6 +235,7 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
 
             for(var c in this.connections) 
                 this.connections[c].close()
+            this.client_id = NEW_CLIENT_ID
         },
 
         // 
