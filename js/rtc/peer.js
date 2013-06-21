@@ -232,6 +232,9 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
 
         shutdown: function(){
             this.sendToAll('bye')
+
+            for(var c in this.connections) 
+                this.connections[c].close()
         },
 
         // 

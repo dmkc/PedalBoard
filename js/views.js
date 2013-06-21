@@ -78,7 +78,7 @@ define(
 
             // The main app view
             PedalBoardView = Backbone.View.extend({
-                el: 'body',
+                el: '#pedal_view',
                 dom: {},
                 // TODO: switch to touch/tap events with zepto
                 events: {
@@ -86,16 +86,17 @@ define(
                     'click #live_input'       : 'liveInput',
                     'click #stop_input'       : 'stopInput',
                     /*
-                    'click #add_compressor'   : 'addPedal',
-                    'click #add_stereochorus'   : 'addPedal',
+                    'click #add_compressor'   : 'addPedalModel',
+                    'click #add_stereochorus' : 'addPedalModel',
                     */
                 },
 
                 init: function() {
                     this.controller = PedalBoard.PedalBoard.init()
                     this.dom = {
-                        pedals: this.$('#pedals')
+                        pedals: this.$('#pedals'),
                     }
+
                     this.$('#add_compressor, #add_stereochorus')
                         .on('click', _.bind(function(e){
                             this.addPedalModel(e.target.id.substr(4))
@@ -166,10 +167,76 @@ define(
                 stopInput: function() {
                     this.controller.stopInput();
                 }
+            }),
+
+            AppView = Backbone.View.extend({
+                el: 'body',
+                dom: {},
+                events: {
+                    'click #session_new'      : 'sessionJoin',
+                    'click #session_join'     : 'sessionJoin',
+                    'click #session_exit'     : 'sessionExit',
+                },
+
+                init: function(session_id) {
+                    // Set up routing
+                    var that = this,
+                        Router = Backbone.Router.extend({
+                            routes: {
+                                "new"   : that.start,
+                                "s/:sid": that.start,
+                                "exit"  : that.shutdown,
+                            }
+                        }),
+                        router = this.router = new Router()
+
+                    Backbone.history.start({pushState: true})
+
+                    // Init DOM stuff
+                    this.dom = {
+                        session_id: this.$('#session_id'),
+                    }
+
+                    // Initialize syncrouter
+                    Backbone.SyncRouter.on('init', _.bind(function() {
+                        console.log("Sync router initialized")
+                        window.PedalBoardView = new PedalBoardView().init()
+                        history.pushState(
+                            { session_id: this.peer.session_id }, 
+                            "", 
+                            "/s/"+this.peer.session_id)
+                    }, Backbone.SyncRouter))
+
+                    return this
+                },
+
+                start: function(session_id) {
+                    Backbone.SyncRouter.init(session_id)
+                },
+
+                shutdown: function() {
+                    Backbone.SyncRouter.shutdown()
+                },
+
+                // UI mappings ////////
+                sessionJoin: function(){
+                    var sid = this.dom.session_id.val().trim()
+
+                    if(!sid) {
+                        this.router.navigate('new', {trigger: true})
+                    } else {
+                        this.router.navigate('s/' + sid, {trigger:true})
+                    }
+                },
+
+                sessionExit: function(){
+                    this.router.navigate('exit', {trigger: true})
+                },
             })
     return {
         CompressorView: CompressorView,
         StereoChorusView: StereoChorusView,
-        PedalBoardView: PedalBoardView
+        PedalBoardView: PedalBoardView,
+        AppView: AppView
     }
 })

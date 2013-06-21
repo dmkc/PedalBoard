@@ -10,15 +10,26 @@
         <script data-main="js/main.js" src="js/require.min.js"></script>
     </head>
     <body>
-        <button id="play_sample_0">Play sample 1</button>
-        <button id="live_input">Use live input</button>
-        <button id="stop_input">Stop this madness</button>
+        <!-- General app controls -->
+        <fieldset>
+            <input type="input" id="session_id" placeholder="Existing session ID">
+            <button id="session_join">Join</button>
+            <button id="session_new">New</button>
+            <button id="session_exit">Exit</button>
+        </fieldset>
 
-        <button id="add_compressor">Add compressor</button>
-        <button id="add_stereochorus">Add stereo chorus</button>
+        <!-- PedalView -->
+        <div id="pedal_view">
+            <button id="play_sample_0">Play sample 1</button>
+            <button id="live_input">Use live input</button>
+            <button id="stop_input">Stop this madness</button>
 
-        <div id="pedals">
-            
+            <button id="add_compressor">Add compressor</button>
+            <button id="add_stereochorus">Add stereo chorus</button>
+
+            <div id="pedals">
+                
+            </div>
         </div>
         
     </body>

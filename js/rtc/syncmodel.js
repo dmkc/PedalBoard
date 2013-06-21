@@ -179,6 +179,14 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
             }
         },
 
+        shutdown: function() {
+            if(!this.peer) return
+
+            this.peer.shutdown()
+            delete this.peer
+            delete this.rootModel
+        },
+
         dataChannelState: function(e) {
             // Our first peer connection. Sync the root model
             if (e.state == 'open' && 
@@ -188,6 +196,7 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
                 this.state = this.states.INITIALIZING
             }
         },
+
         
     },
     

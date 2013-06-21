@@ -37,9 +37,7 @@ function echoMessage(sid, message, sendTo) {
     var clients = Session.get(sid), connection
     for(var c in clients) {
         connection = clients[c]
-        if(sendTo.indexOf(connection.client_id.toString()) < 0){
-            console.log('Skipping', connection.client_id, ', not in', sendTo)
-        } else {
+        if(sendTo.indexOf(connection.client_id.toString()) >= 0){
             console.log('Sending msg to', connection.client_id)
             connection.send(message, errorHandler)
         }
