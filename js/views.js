@@ -184,7 +184,7 @@ define(
                         Router = Backbone.Router.extend({
                             routes: {
                                 "new"   : that.start,
-                                "s/:sid": that.join,
+                                "s/:sid": _.bind(that.join, that),
                                 "exit"  : that.shutdown,
                             }
                         }),
