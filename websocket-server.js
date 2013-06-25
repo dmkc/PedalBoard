@@ -4,9 +4,11 @@ var clients = [],
     connectionCount = 0, 
     NEW_CLIENT_ID = -1;
 
-var server = http.createServer(function(request, response) {});
-server.listen(process.env.PORT || 1337, function() {
-  console.log("Server listening on port 1337");
+var server = http.createServer(function(request, response) {}),
+    port = process.env.PORT || 1337
+
+server.listen(port, function() {
+  console.log("Server listening on", port);
 });
 
 // Set up WebSocket server
