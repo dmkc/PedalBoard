@@ -91,8 +91,8 @@ define(
                     */
                 },
 
-                init: function() {
-                    this.controller = PedalBoard.PedalBoard.init()
+                init: function(existingSession) {
+                    this.controller = !existingSession || PedalBoard.PedalBoard.init()
                     this.dom = {
                         pedals: this.$('#pedals'),
                     }
@@ -184,7 +184,7 @@ define(
                         Router = Backbone.Router.extend({
                             routes: {
                                 "new"   : that.start,
-                                "s/:sid": that.start,
+                                "s/:sid": that.join,
                                 "exit"  : that.shutdown,
                             }
                         }),
@@ -200,7 +200,7 @@ define(
                     // Initialize syncrouter
                     Backbone.SyncRouter.on('init', _.bind(function() {
                         console.log("Sync router initialized")
-                        window.PedalBoardView = new PedalBoardView().init()
+                        window.PedalBoardView = new PedalBoardView().init(this.existingSession)
                         history.pushState(
                             { session_id: this.peer.session_id }, 
                             "", 
@@ -212,6 +212,11 @@ define(
 
                 start: function(session_id) {
                     Backbone.SyncRouter.init(session_id)
+                },
+
+                join: function(session_id) {
+                    this.existingSession = true
+                    this.start(session_id)
                 },
 
                 shutdown: function() {
