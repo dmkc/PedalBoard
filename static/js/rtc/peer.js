@@ -18,8 +18,11 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
     function Peer() {
         var registered = this.registered = false
 
-        this.client_id = NEW_CLIENT_ID
-        this.connections = []
+        _.extend(this, {
+            client_id        : NEW_CLIENT_ID,
+            websocketRetries : 5,
+            connections      : [],
+        })
     }
 
     Peer.prototype = Object.create(
@@ -119,9 +122,12 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
                     console.log('Peer: WebSocket closed, attempting to reconnect');
                     this.registered = false
 
-                    setTimeout(
-                        _.bind(this.initSocket, this), 
-                        1500)
+                    if(this.websocketRetries > 0) {
+                        setTimeout(
+                            _.bind(this.initSocket, this), 
+                            1500)
+                        this.websocketRetries--
+                    }
                 }, this));
 
             // Register and announce self when a new socket connection
@@ -309,8 +315,10 @@ define(['util', 'rtc/rtc', 'underscore', 'backbone'],
         removeConnection: function(cnxn) {
             this.connections.splice(this.connections.indexOf(cnxn), 1);
         },
-    }, Backbone.Events));
 
-    _.extend(Peer, Backbone.Events)
+    }, 
+    // Mix in Backbone.Events into Peer
+    Backbone.Events));
+
     return Peer
 });

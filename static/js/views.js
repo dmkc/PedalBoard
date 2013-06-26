@@ -1,5 +1,5 @@
 define(
-    ['rtc/syncmodel', 'audio/pedals', 'audio/pedalboard', 'models'], 
+    ['rtc/syncmodel', 'audio/pedals', 'audio/pedalboard', 'models'],
     function(Backbone, Pedals, PedalBoard, Models) {
         // A generic pedal that notifies its model of parameter changes
         var PedalView = Backbone.View.extend({
@@ -27,7 +27,7 @@ define(
 
                     if (node.className.indexOf('bypass') !== -1)
                         val = node.checked;
-                    else 
+                    else
                         val = e.target.value;
 
                     this.model.set(e.target.className, val);
@@ -112,14 +112,14 @@ define(
                     return this
                 },
 
-                // Set up pedals from linked list 
+                // Set up pedals from linked list
                 restorePedals: function() {
                     var cur = this.pedalList.next(), view
 
                     while(cur != null) {
                         view = this.addPedalView(cur)
                         view.restore()
-                        cur = cur.next() 
+                        cur = cur.next()
                     }
                 },
 
@@ -136,10 +136,10 @@ define(
                 },
 
 
-                // TODO: this screams declarative. 
+                // TODO: this screams declarative.
                 // TODO: Fix ugly addPedalView/Model split
                 addPedalView: function(model) {
-                    var view, 
+                    var view,
                         // Figure out view name from model name
                         name = model.name.substr(0, model.name.length-5).toLowerCase(),
                         that = this
@@ -190,7 +190,7 @@ define(
                         }),
                         router = this.router = new Router()
 
-                    Backbone.history.start({pushState: true})
+                    var routerInit = Backbone.history.start({pushState: true, root:'/'})
 
                     // Init DOM stuff
                     this.dom = {
@@ -202,8 +202,8 @@ define(
                         console.log("Sync router initialized")
                         window.PedalBoardView = new PedalBoardView().init(this.existingSession)
                         history.pushState(
-                            { session_id: this.peer.session_id }, 
-                            "", 
+                            { session_id: this.peer.session_id },
+                            "",
                             "/s/"+this.peer.session_id)
                     }, Backbone.SyncRouter))
 
