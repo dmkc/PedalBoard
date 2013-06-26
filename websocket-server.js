@@ -1,7 +1,7 @@
 var WebSocketServer = require('websocket').server;
 var http = require('http');
 var clients = [],
-    connectionCount = 0, 
+    connectionCount = 0,
     NEW_CLIENT_ID = -1;
 
 var server = http.createServer(function(request, response) {}),
@@ -9,20 +9,21 @@ var server = http.createServer(function(request, response) {}),
 
 server.listen(port, function() {
   console.log("Server listening on", port);
-});
+})
 
 // Set up WebSocket server
 wsServer = new WebSocketServer({
     httpServer: server
 });
 
-// 1 in 2^^122 chance of collisions.
-// http://stackoverflow.com/a/2117523
+// 52^8 chance of collision
 function genSessionId() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
-        return v.toString(16);
-    });
+    return 'xxxxxxxx'.replace(/[x]/g, function(c) {
+        return String.fromCharCode(
+            // Want only upper or lower case letters
+            (Math.random()*2|0 ?  65 : 97) +
+            (Math.random()*26))
+    })
 }
 
 function errorHandler(err){
@@ -52,10 +53,10 @@ wsServer.on('request', function(request) {
     connection.client_id = NEW_CLIENT_ID
 
     console.log('Total clients:', clients.length)
-    
+
     // Process WebSocket messages
     connection.on('message', function(message) {
-        var sendTo = [], 
+        var sendTo = [],
             sid, client_id, msg, session
 
         // Ignore malformed messages
@@ -77,7 +78,7 @@ wsServer.on('request', function(request) {
         // Client (re-)registration
         if (msg.type == "register") {
             // Create new session and client ID
-            if ((client_id <= NEW_CLIENT_ID || isNaN(client_id))) 
+            if ((client_id <= NEW_CLIENT_ID || isNaN(client_id)))
             {
                 client_id = newClientID()
 
@@ -101,12 +102,12 @@ wsServer.on('request', function(request) {
                 if(!sid ||
                   !Session.exists(sid) ||
                   !Session.clientInSession(sid, client_id)) {
-                    console.error('A client ID given without a valid session ID', 
+                    console.error('A client ID given without a valid session ID',
                                   this.remoteAddress)
                     this.close()
                     return
                 }
-                
+
                 // The case of server going down and client re-registering with
                 // existing client_id
                 if (connectionCount < client_id) {
@@ -122,12 +123,12 @@ wsServer.on('request', function(request) {
             // Include current number of clients so peer knows if it's alone
             msg.client_count = Object.keys(Session.get(sid)).length
             sendTo = [client_id.toString()]
-            
+
         // Broadcast message to all connected clients
         } else {
             if(!sid || !Session.exists(sid) || !Session.clientInSession(sid, client_id)) {
-                console.error("Attempt to send with invalid session or client ID", 
-                              this.client_id, 
+                console.error("Attempt to send with invalid session or client ID",
+                              this.client_id,
                               msg.type)
                 return
             }
@@ -150,13 +151,15 @@ wsServer.on('request', function(request) {
 
     // Client disconnected. Clean up memory.
     connection.on('close', function() {
-        console.log("Peer disconnected. ID:", 
-                    this.client_id, 
-                    this.remoteAddress);        
+        console.log("Peer disconnected. ID:",
+                    this.client_id,
+                    this.remoteAddress);
         var session = Session.get(this.session_id)
         if (!session) return
         delete session[this.client_id]
     });
+
+    // TODO: Sweep dead sessions
 });
 
 // SESSIONS ///////////////////
@@ -165,7 +168,9 @@ Session = {
     sessions : {},
 
     create: function(){
-        var uuid = genSessionId()
+        var uuid
+        // Make sure the session ID is unique
+        while(this.sessions[ (uuid = genSessionId()) ] !== undefined);
         this.sessions[uuid] = {}
         return uuid
     },
@@ -185,7 +190,7 @@ Session = {
 
     getConnection: function(sessions_id, client_id) {
         var session = this.get(session_id)
-        if (!session) 
+        if (!session)
             return null
         return session[client_id]
     },
@@ -193,7 +198,7 @@ Session = {
     // Return true if a client ID belongs to a particular session
     clientInSession: function(session_id, client_id) {
         var session = this.get(session_id)
-        if (!session) 
+        if (!session)
             return null
 
         return session[client_id] !== undefined
@@ -202,9 +207,9 @@ Session = {
     // Execute a function for each connection in a particular session
     each: function(session_id, func, opts) {
         var session = this.get(session_id)
-        if (!session) 
+        if (!session)
             return null
-        else 
+        else
             for(var c in session) {
                 func(session[c], opts)
             }
@@ -219,13 +224,13 @@ var oconsole = require('console')
 var console = {
     log: function() {
         args = Array.prototype.slice.call(arguments);
-        args.unshift(Date()) 
+        args.unshift(Date())
         return oconsole.log.apply(oconsole, args)
     },
 
     error: function() {
         args = Array.prototype.slice.call(arguments);
-        args.unshift(Date()) 
+        args.unshift(Date())
         return oconsole.error.apply(oconsole,args)
     }
 }
