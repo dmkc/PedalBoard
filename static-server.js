@@ -9,5 +9,5 @@ app.get('/*', function(req, res) {
   res.sendfile(__dirname + '/static/index.html');
 })
 
-app.listen(3000)
+app.listen(8000)
 
