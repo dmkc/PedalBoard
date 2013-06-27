@@ -102,7 +102,7 @@ define(
                 },
 
                 init: function(existingSession) {
-                    this.controller = !existingSession || PedalBoard.PedalBoard.init()
+                    this.controller = existingSession || PedalBoard.PedalBoard.init()
                     this.dom = {
                         pedals: this.$('#pedals'),
                     }

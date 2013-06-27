@@ -274,7 +274,24 @@ define(['backbone', 'util', 'rtc/peer'], function(Backbone, util, Peer) {
             }
         },
 
+        destroy: function() {
+            var cur = this
+            // Remove model from its linked list, if set
+            prev = cur.prev()
+            next = cur.next()
+            if(next) {
+                prev.set('_next', { id: next.id, name: next.name })
+                next.set('_prev', { id: prev.id, name: prev.name })
+            } else {
+                prev.set('_next', null)
+                prev._next = undefined
+            }
+            this.set({'_prev': null, '_next': null})
+            this._next = this._prev = undefined
 
+            this.trigger('remove', this)
+            Backbone.Model.prototype.destroy.apply(this, arguments)
+        },
     });
 
     // Override extending to keep track of name to model mapping, which we'll
