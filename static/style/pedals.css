@@ -1,14 +1,15 @@
 body {
-    font-family: Menlo, monospace;
+    font-family: "Roboto Condensed", monospace;
+    margin: 0;
+    padding: 0;
 }
 
-#templates { 
+#templates {
     display: none;
 }
 
 .pedal {
-    background: #eee;
-    padding: 1em;
+    padding: 1.5em;
     border-radius: 1em;
     margin: 0 0 1em 0;
     position: relative;
@@ -16,6 +17,8 @@ body {
 
 .pedal label {
     display: block;
+    font-weight: bold;
+    font-size: 1.3em;
 }
 
 .pedal .bypass {
@@ -23,3 +26,4 @@ body {
     top: 1em;
     right: 1em;
 }
+

@@ -1,6 +1,6 @@
 define(
-    ['rtc/syncmodel', 'audio/pedals', 'audio/pedalboard', 'models'],
-    function(Backbone, Pedals, PedalBoard, Models) {
+    ['rtc/syncmodel', 'audio/pedals', 'audio/pedalboard', 'models', 'mobile-range-slider'],
+    function(Backbone, Pedals, PedalBoard, Models, MobileRangeSlider) {
         // A generic pedal that notifies its model of parameter changes
         var PedalView = Backbone.View.extend({
                 el: function() {
@@ -8,17 +8,24 @@ define(
                 },
 
                 init: function() {
+                    var that = this
                     this.model.on('change', this.modelChange, this);
                     this.model.on('destroy', _.bind(this.destroy,this));
                     this.$('.remove').on('click', _.bind(function(){
                         this.model.destroy()}, this));
 
+                    this.$('input[type=range]').each(function(){
+                        this.addEventListener('change', that.changeHandler.bind(that))
+                        new MobileRangeSlider(this)
+                    })
                     return this;
                 },
 
+                /*
                 events: {
                     "change": "changeHandler",
                 },
+                */
 
                 // Set model in response to changes in UI
                 changeHandler: function(e) {
@@ -40,11 +47,14 @@ define(
                 },
 
                 // Restore UI settings from a model
-                restore: function(atrs) {
-                    var attrs = attrs || this.model.attributes
+                restore: function(attrs) {
+                    var attrs = attrs || this.model.attributes,
+                        el;
 
                     for(var a in attrs) {
-                        this.$('.' + a).val(attrs[a])
+                        el = this.$('.' + a)
+                        el.val(attrs[a]).trigger('change', {})
+                        if(el.length > 0) el.get(0).dispatchEvent(new Event('change'))
                     }
                 },
 

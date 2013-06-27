@@ -2,20 +2,23 @@
 requirejs.config({
     shim: {
       "backbone": {
-          deps: ["underscore", 'jquery-1.9.1.min'],
+          deps: ["underscore", 'jquery-2.0.2.min'],
           exports: "Backbone"
       },
       "underscore": {
           exports: "_"
       },
-      "jquery-1.9.1.min": {
+      "jquery-2.0.2.min": {
           exports: "jQuery"
-      }
+      },
+      "mobile-range-slider": {
+          exports: "MobileRangeSlider"
+      },
     }
 });
 
 
-require(['rtc/peer', 'rtc/syncmodel', 'peerui', 'jquery-1.9.1.min','views'], 
+require(['rtc/peer', 'rtc/syncmodel', 'peerui', 'jquery-2.0.2.min','views'], 
         function(Peer, Backbone, PeerUI, jQuery, Views) {
     var peer,
         session_id = undefined,
