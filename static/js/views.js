@@ -225,7 +225,7 @@ define(
                 },
 
                 join: function(session_id) {
-                    this.existingSession = true
+                    Backbone.SyncRouter.existingSession = true
                     this.start(session_id)
                 },
 
