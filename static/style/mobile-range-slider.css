@@ -1,0 +1,61 @@
+.slider {
+    position: relative;
+    margin: -0.5em 0 0.5em 0;
+    width: 70%;
+    height: 50px;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: rgba(0,0,0,0);
+    -webkit-text-size-adjust: none;
+    -webkit-touch-callout: none;
+}
+
+.track {
+    position: absolute;
+    top: 30%;
+    left: 0;
+    right: 0;
+    height: 20%;
+    background-color: #ccc;
+    border-radius: 1em;
+}
+
+.slider.active .track {
+    background: #ababab;
+}
+
+.slider.active .knob {
+    width:  3.5em;
+    height: 3.5em;
+    border-radius: 3em;
+    margin-left: -0.5em;
+    margin-top: -0.5em;
+    opacity: 0.5;
+    background: green;
+}
+
+.knob {
+    transition-property: width, height, margin, opacity;
+    transition-duration: 0.06s;
+    position: absolute;
+    margin: 0;
+    padding: 0;
+    height: 2.5em;
+    width: 2.5em;
+
+    border-radius: 3em;
+    background: #2082BF;
+    cursor: pointer;
+}
+
+.knob_dot {
+    position: absolute;
+    width: 1em;
+    height: 1em;
+    top: 50%;
+    left: 50%;
+    background: #D8D8D8;
+    margin-top: -0.5em;
+    margin-left: -0.5em;
+    border-radius: 1em;
+}
+
