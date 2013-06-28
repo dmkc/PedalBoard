@@ -15,7 +15,7 @@
     </head>
     <body>
         <!-- General app controls -->
-        <div id="session_menu" class="active">
+        <div id="session-menu" class="active">
             <form class="pure-form">
                 <h1>Pedal Board</h1>
                 <p>Guitar effects with a distributed UI.</p>
@@ -30,8 +30,15 @@
             </form>
         </div>
 
-        <!-- PedalView -->
-        <div id="pedal_view">
+        <!-- PedalMenuView -->
+        <div id="pedal-menu" class="pure-menu">
+            <a href="#" class="pure-menu-heading">Pedals</a>
+            <ul id="pedal-menu-items">
+            </ul> 
+        </div>
+
+        <!-- PedalView where all the pedals gooo -->
+        <div id="pedal-view">
             <button class="pure-button" id="play_sample_0">Play sample 1</button>
             <button class="pure-button" id="live_input">Use live input</button>
             <button class="pure-button" id="stop_input">Stop this madness</button>
@@ -44,9 +51,10 @@
             </div>
         </div>
 
+
     </body>
     <div id="templates">
-        <div id="template_compressor"  class="pure-u-1-3" >
+        <div id="template-compressor"  class="pure-u-1-3" >
             <div class="pedal pedal_compressor">
                 <input class="bypass" type="checkbox" title="Bypass this pedal">
                 <label>Attack
@@ -68,7 +76,7 @@
             </div>
         </div>
 
-        <div id="template_stereochorus" class="pure-u-1-3">
+        <div id="template-stereochorus" class="pure-u-1-3">
             <div class="pedal pedal_compressor">
                 <input class="bypass" type="checkbox" title="Bypass this pedal">
                 <label>
@@ -86,5 +94,9 @@
                 <button class="remove">X</button>
             </div>
         </div>
+
+        <li id="template-pedal-menu-item">
+            <a href="#" class="pedal-menu-item-title"></a> 
+        </li>
     </div>
 </html>

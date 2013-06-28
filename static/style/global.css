@@ -6,7 +6,7 @@ body {
 
 input,
 .pure-button,
-#pedal_view button
+#pedal-view button
 {
     font-family: "Roboto Condensed", monospace;
 }
@@ -25,7 +25,7 @@ input,
     font-size: 97% !important;
 }
 
-#session_menu {
+#session-menu {
     position: fixed;
     background: #f5f5f5;
     border-right: 0.5em solid #aaa;
@@ -37,10 +37,37 @@ input,
     transition-duration: 0.5s;
 }
 
-#session_menu.active {
+#session-menu.active {
     margin: 0;
 }
 
-#session_menu input {
+#session-menu input {
     display: inline;
 }
+
+#pedal-menu {
+    font-size: 130%;
+    position: fixed;
+    transition: margin 0.5s;
+    margin-right: -82%;
+    width: 80%;
+    right: 0;
+    background: #333;
+    height: 100%;
+}
+
+#pedal-menu.pure-menu-open {
+    margin-right: 0;   
+}
+
+#pedal-menu .pure-menu-heading
+{
+    color: white;
+}
+
+#pedal-menu ul li a 
+{
+    color: #aaa;
+}
+
+

@@ -66,7 +66,7 @@ define(
 
             CompressorView = PedalView.extend({
                 template: function() {
-                    return $('#template_compressor').clone().removeAttr('id');
+                    return $('#template-compressor').clone().removeAttr('id');
                 },
 
                 changeHandler: function(e) {
@@ -77,7 +77,7 @@ define(
 
             StereoChorusView = PedalView.extend({
                 template: function() {
-                    return $('#template_stereochorus').clone().removeAttr('id');
+                    return $('#template-stereochorus').clone().removeAttr('id');
                 },
 
                 changeHandler: function(e) {
@@ -88,7 +88,7 @@ define(
 
             // The main app view
             PedalBoardView = Backbone.View.extend({
-                el: '#pedal_view',
+                el: '#pedal-view',
                 dom: {},
                 // TODO: switch to touch/tap events with zepto
                 events: {
@@ -102,7 +102,7 @@ define(
                 },
 
                 init: function(existingSession) {
-
+                    this.pedalList = this.model
                     this.dom = {
                         pedals: this.$('#pedals'),
                     }
@@ -113,21 +113,19 @@ define(
                         },this))
 
                     this.views = [];
-                    // Set up the pedals linked list
-                    this.pedalList = Backbone.SyncLList.request('pedalList')
                     this.pedalList.once('sync_list', _.bind(this.restorePedals,this))
                     // TODO: Replace with ScreenStack call
                     this.pedalList.on('add', _.bind(this.addPedalView,this))
 
                     // Init audio engine and add pedals when pedal list updates
+                    // TODO: Move this into AppView init, and instead watch for changes
+                    // in the PlaybackModel or whatever model keeps track of playback state
                     if (!existingSession) {
                         this.controller = Audio.PedalController.init()
                         this.pedalList.on(
                             'add', 
                             this.controller.addPedal.bind(this.controller))
                     }
-
-                    this.pedalList.sync()
 
                     return this
                 },
@@ -191,6 +189,69 @@ define(
                 }
             }),
 
+            // A pedal menu!!
+            PedalMenuItem = Backbone.View.extend({
+                el: function() {
+                    return this.template();
+                },
+
+                template: function() {
+                    return $('#template-pedal-menu-item').clone().removeAttr('id')
+                },
+
+                init: function() {
+                    this.model.on('destroy', this.destroy.bind(this))
+                    this.render()
+
+                    return this
+                },
+
+                render: function() {
+                    this.$('.pedal-menu-item-title').text(
+                        // TODO: need model title
+                        this.model.name
+                    )
+                },
+                destroy: function(){
+                    this.$el.remove()
+                },
+
+            }),
+
+            PedalMenuView = Backbone.View.extend({
+                el: '#pedal-menu',
+                dom: {},
+                events: {
+
+                },
+
+                init: function(){
+                    this.dom = {
+                        menuItems: this.$('#pedal-menu-items')
+                    }
+                    this.model.on('sync_list', this.initItems.bind(this))
+                    this.model.on('add', this.addMenuItem.bind(this))
+                    return this
+                },
+
+                initItems: function(){
+                    console.log('PedalMenuView: creating menu items')
+                    var cur = this.model,
+                        item
+
+                    while((cur = cur.next()) !== null) {
+                        item = this.addMenuItem(cur)
+                    }
+                },
+
+                addMenuItem: function(model){
+                    var item = new PedalMenuItem({ model: model }).init()
+                    this.dom.menuItems.append(item.$el)
+                    return item
+                }
+            }),
+
+            // Primary view that sets up the entire app
             AppView = Backbone.View.extend({
                 el: 'body',
                 dom: {},
@@ -216,13 +277,27 @@ define(
                     // Init DOM stuff
                     this.dom = {
                         session_id: this.$('#session_id'),
-                        session_menu: $('#session_menu'),
+                        sessionMenu: $('#session-menu'),
                     }
 
-                    // Initialize syncrouter
+                    // Set up the pedals linked list
+
+                    // Initialize the app once the router is configured
                     Backbone.SyncRouter.on('init', _.bind(function() {
                         console.log("Sync router initialized")
-                        window.PedalBoardView = new PedalBoardView().init(this.existingSession)
+
+                        var pedalList = this.pedalList = Backbone.SyncLList.request('pedalList')
+                        // Initialize pedal view
+                        that.PedalBoardView = new PedalBoardView({model: pedalList }).init(this.existingSession)
+
+                        // Initialize pedal menu
+                        that.PedalMenu = new PedalMenuView({model: pedalList}).init()
+
+                        // Initialize audio engine
+
+                        // Synchronize pedal list, which will init everything else
+                        pedalList.sync()
+
                         history.pushState(
                             { session_id: this.peer.session_id },
                             "",
@@ -234,8 +309,10 @@ define(
                     return this
                 },
 
+                // SESSION CONTROL ///////////////////
+                // TODO: Move this into a SessionView?
                 start: function(session_id) {
-                    this.dom.session_menu.removeClass('active')
+                    this.dom.sessionMenu.removeClass('active')
                     Backbone.SyncRouter.init(session_id)
                 },
 
