@@ -1,7 +1,7 @@
 define(
-    ['rtc/syncmodel', 'audio/pedals', 'audio/pedalboard', 'models', 'mobile-range-slider'],
-    function(Backbone, Pedals, PedalBoard, Models, MobileRangeSlider) {
-        // A generic pedal that notifies its model of parameter changes
+    ['rtc/syncmodel', 'audio/pedals', 'models', 'mobile-range-slider'],
+    function(Backbone, Audio, Models, MobileRangeSlider) {
+        // A generic pedal view with generic restore and change methods.
         var PedalView = Backbone.View.extend({
                 el: function() {
                     return this.template();
@@ -9,11 +9,11 @@ define(
 
                 init: function() {
                     var that = this
-                    this.model.on('change', this.modelChange, this);
                     this.model.on('destroy', _.bind(this.destroy,this));
                     this.$('.remove').on('click', _.bind(function(){
                         this.model.destroy()}, this));
 
+                    // Use pretty sliders where possible
                     this.$('input[type=range]').each(function(){
                         this.addEventListener('change', that.changeHandler.bind(that))
                         new MobileRangeSlider(this)
@@ -27,7 +27,7 @@ define(
                 },
                 */
 
-                // Set model in response to changes in UI
+                // Change model in response to changes in UI
                 changeHandler: function(e) {
                     var node = e.target,
                         val;
@@ -40,20 +40,20 @@ define(
                     this.model.set(e.target.className, val);
                 },
 
-                // Update UI in response to model
-                modelChange: function(model) {
+                // Update UI in response to model changes
+                render: function(model) {
                     var attrs = model.changedAttributes()
                     this.restore(attrs)
                 },
 
-                // Restore UI settings from a model
+                // Restore view settings from the model
                 restore: function(attrs) {
                     var attrs = attrs || this.model.attributes,
                         el;
 
                     for(var a in attrs) {
                         el = this.$('.' + a)
-                        el.val(attrs[a]).trigger('change', {})
+                        el.val(attrs[a])
                         if(el.length > 0) el.get(0).dispatchEvent(new Event('change'))
                     }
                 },
@@ -102,7 +102,7 @@ define(
                 },
 
                 init: function(existingSession) {
-                    this.controller = existingSession || PedalBoard.PedalBoard.init()
+
                     this.dom = {
                         pedals: this.$('#pedals'),
                     }
@@ -116,7 +116,17 @@ define(
                     // Set up the pedals linked list
                     this.pedalList = Backbone.SyncLList.request('pedalList')
                     this.pedalList.once('sync_list', _.bind(this.restorePedals,this))
+                    // TODO: Replace with ScreenStack call
                     this.pedalList.on('add', _.bind(this.addPedalView,this))
+
+                    // Init audio engine and add pedals when pedal list updates
+                    if (!existingSession) {
+                        this.controller = Audio.PedalController.init()
+                        this.pedalList.on(
+                            'add', 
+                            this.controller.addPedal.bind(this.controller))
+                    }
+
                     this.pedalList.sync()
 
                     return this
@@ -156,11 +166,13 @@ define(
 
                     if (name == 'compressor') {
                         view = new CompressorView({
-                            model: model
+                            model: model,
+                            title: "Compressor",
                         }).init()
                     } else if (name == 'stereochorus') {
                         view = new StereoChorusView({
-                            model: model
+                            model: model,
+                            title: "Stereo Chorus",
                         }).init()
                     }
                     this.dom.pedals.append(view.$el);
