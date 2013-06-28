@@ -21,9 +21,6 @@ requirejs.config({
 require(['rtc/peer', 'rtc/syncmodel', 'peerui', 'jquery-2.0.2.min','views'], 
         function(Peer, Backbone, PeerUI, jQuery, Views) {
     var peer,
-        session_id = undefined,
-        app = new Views.AppView().init(session_id)
-
-
+        app = new Views.AppView().init()
 });
 

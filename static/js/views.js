@@ -193,18 +193,18 @@ define(
                     var that = this,
                         Router = Backbone.Router.extend({
                             routes: {
-                                "new"   : that.start,
-                                "s/:sid": _.bind(that.join, that),
+                                "new"   : that.start.bind(that),
+                                "s/:sid": that.join.bind(that),
                                 "exit"  : that.shutdown,
                             }
                         }),
                         router = this.router = new Router()
 
-                    var routerInit = Backbone.history.start({pushState: true, root:'/'})
 
                     // Init DOM stuff
                     this.dom = {
                         session_id: this.$('#session_id'),
+                        session_menu: $('#session_menu'),
                     }
 
                     // Initialize syncrouter
@@ -217,10 +217,13 @@ define(
                             "/s/"+this.peer.session_id)
                     }, Backbone.SyncRouter))
 
+                    var routerInit = Backbone.history.start({pushState: true, root:'/'})
+
                     return this
                 },
 
                 start: function(session_id) {
+                    this.dom.session_menu.removeClass('active')
                     Backbone.SyncRouter.init(session_id)
                 },
 
@@ -234,7 +237,8 @@ define(
                 },
 
                 // UI mappings ////////
-                sessionJoin: function(){
+                sessionJoin: function(e){
+                    e.preventDefault()
                     var sid = this.dom.session_id.val().trim()
 
                     if(!sid) {

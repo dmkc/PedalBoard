@@ -1,13 +1,3 @@
-body {
-    font-family: "Roboto Condensed", monospace;
-    margin: 0;
-    padding: 0;
-}
-
-#templates {
-    display: none;
-}
-
 .pedal {
     padding: 1.5em;
     border-radius: 1em;
