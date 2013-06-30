@@ -10,6 +10,7 @@ define(
                 init: function() {
                     var that = this
                     this.model.on('destroy', _.bind(this.destroy,this));
+                    this.model.on('change', this.render.bind(this))
                     this.$('.remove').on('click', _.bind(function(){
                         this.model.destroy()}, this));
 
@@ -201,6 +202,7 @@ define(
 
                 init: function() {
                     this.model.on('destroy', this.destroy.bind(this))
+                    this.$el.on('click', this.itemClick.bind(this))
                     this.render()
 
                     return this
@@ -212,8 +214,14 @@ define(
                         this.model.name
                     )
                 },
+
                 destroy: function(){
                     this.$el.remove()
+                },
+
+                itemClick: function(e){
+                    e.preventDefault()
+                    this.trigger('pedalmenu_selected', this.model)
                 },
 
             }),
@@ -222,18 +230,45 @@ define(
                 el: '#pedal-menu',
                 dom: {},
                 events: {
-
                 },
 
                 init: function(){
                     this.dom = {
-                        menuItems: this.$('#pedal-menu-items')
+                        menuItems: this.$('#pedal-menu-items'),
+                        menuButton: $('#pedal-menu-button'),
                     }
+                    this.dom.menuButton//.on('touchstart', this.toggleMenu.bind(this))
+                                       .on('click', this.toggleMenu.bind(this))
+
+                    // Listen for changes in pedals and add menu items
                     this.model.on('sync_list', this.initItems.bind(this))
                     this.model.on('add', this.addMenuItem.bind(this))
                     return this
                 },
 
+                // Show/hide pedal menu
+                toggleMenu: function(e){
+                    var $el = this.$el
+                    e.stopPropagation()
+                    e.preventDefault()
+
+                    // Open menu
+                    if(!$el.hasClass('pure-menu-open')) {
+                        // add handler for clicking outside the menu, remove it
+                        // on subsequent toggleMenu call
+                        $(document).add($el).on('click', 
+                            function menuClickHandler(e){
+                                e.stopPropagation()
+                                $(document).add($el).off('click', arguments.callee)
+                                $el.removeClass('pure-menu-open')
+                            })
+                        $el.addClass('pure-menu-open')
+                    } else {
+                        $el.removeClass('pure-menu-open')
+                    }
+                },
+
+                // Build menu items based on an existing pedal list.
                 initItems: function(){
                     console.log('PedalMenuView: creating menu items')
                     var cur = this.model,
@@ -244,11 +279,18 @@ define(
                     }
                 },
 
+                // Add menu item when a new linked list item is added
                 addMenuItem: function(model){
                     var item = new PedalMenuItem({ model: model }).init()
+                    item.on('pedalmenu_selected', this.itemSelected.bind(this))
                     this.dom.menuItems.append(item.$el)
                     return item
-                }
+                },
+
+                // User clicks on one of the menu items
+                itemSelected: function(model){
+                    console.log('PedalMenu item selected', model)
+                },
             }),
 
             // Primary view that sets up the entire app
@@ -295,6 +337,9 @@ define(
 
                         // Initialize audio engine
 
+                        pedalList.on('sync_list', (function(){
+                            this.dom.sessionMenu.removeClass('active')
+                        }).bind(that))
                         // Synchronize pedal list, which will init everything else
                         pedalList.sync()
 
@@ -312,7 +357,6 @@ define(
                 // SESSION CONTROL ///////////////////
                 // TODO: Move this into a SessionView?
                 start: function(session_id) {
-                    this.dom.sessionMenu.removeClass('active')
                     Backbone.SyncRouter.init(session_id)
                 },
 
