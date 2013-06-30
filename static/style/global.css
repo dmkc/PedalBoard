@@ -33,14 +33,13 @@ input,
     text-align: center;
     height: 100%;
     margin-left: -105%;
-    transition-property: margin;
-    transition-duration: 0.5s;
-    transform: translate3d(0, 0, 0);
     z-index: 10;
+    -webkit-transform: translate3d(0,0,0); 
+    -webkit-transition: -webkit-transform 0.5s ease;
 }
 
 #session-menu.active {
-    margin: 0;
+    -webkit-transform: translate3d(104%,0,0)
 }
 
 #session-menu input {
@@ -54,19 +53,17 @@ input,
 #pedal-menu {
     font-size: 130%;
     position: fixed;
-    transition: margin 0.5s;
-    margin-right: -82%;
+    -webkit-transform: translate3d(100%,0,0); 
+    -webkit-transition: -webkit-transform 0.2s ease;
     width: 80%;
     right: 0;
     background: #333;
     height: 100%;
     z-index: 3;
-    /* trigger GPU acceleration */
-    transform: translate3d(0, 0, 0);
 }
 
 #pedal-menu.pure-menu-open {
-    margin-right: 0;   
+    -webkit-transform: translate3d(0,0,0);    
 }
 
 #pedal-menu .pure-menu-heading
@@ -83,3 +80,4 @@ input,
 .icon-medium {
     font-size: 1.5em;
 }
+
