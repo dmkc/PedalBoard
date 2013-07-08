@@ -5,7 +5,8 @@
   "main": "websocket-server.js",
   "dependencies": {
     "websocket": "~1.0.8",
-    "express": "3.x"
+    "express": "3.x",
+    "requirejs": "2.x"
   },
   "author": "Dmitry Kichenko",
   "license": "BSD"

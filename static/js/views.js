@@ -60,7 +60,7 @@ define(
                 },
 
                 destroy: function() {
-                    this.$el.remove();
+                    this.$el.remove()
                 },
 
             }),
@@ -330,7 +330,10 @@ define(
 
                         var pedalList = this.pedalList = Backbone.SyncLList.request('pedalList')
                         // Initialize pedal view
-                        that.PedalBoardView = new PedalBoardView({model: pedalList }).init(this.existingSession)
+                        that.PedalBoardView = new PedalBoardView({
+                            model: pedalList,
+                            el: '#pedal-view',
+                        }).init(this.existingSession)
 
                         // Initialize pedal menu
                         that.PedalMenu = new PedalMenuView({model: pedalList}).init()
