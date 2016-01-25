@@ -102,10 +102,12 @@ wsServer.on('request', function(request) {
                 if(!sid ||
                   !Session.exists(sid) ||
                   !Session.clientInSession(sid, client_id)) {
-                    console.error('A client ID given without a valid session ID',
-                                  this.remoteAddress)
-                    this.close()
-                    return
+                    console.error(
+                        'A client ID given without a valid session ID',
+                        this.remoteAddress
+                    );
+                    this.close();
+                    return;
                 }
 
                 // The case of server going down and client re-registering with
@@ -127,10 +129,26 @@ wsServer.on('request', function(request) {
         // Broadcast message to all connected clients
         } else {
             if(!sid || !Session.exists(sid) || !Session.clientInSession(sid, client_id)) {
-                console.error("Attempt to send with invalid session or client ID",
-                              this.client_id,
-                              msg.type)
-                return
+                console.error(
+                    'Error sending msg',
+                    msg,
+                    ': session',
+                    sid,
+                    'is invalid'
+                );
+                return;
+            }
+
+            if(!Session.clientInSession(sid, client_id)) {
+                console.error(
+                    'Error sending msg type',
+                    msg.type,
+                    ': client ID',
+                    this.client_id,
+                    'not in session',
+                    sid
+                );
+                return;
             }
             // Send message to a specific session ID or to all in the session
             if(msg.dest) {
@@ -140,8 +158,8 @@ wsServer.on('request', function(request) {
                 sendTo.splice(sendTo.indexOf(connection.client_id.toString()), 1)
             }
 
-            console.log('Sending', msg.type, "from:",
-                    connection.client_id, "to", sendTo)
+            console.log('Msg type', msg.type, "from:",
+                    connection.client_id, "to", sendTo);
         }
 
         // sign message with client ID
