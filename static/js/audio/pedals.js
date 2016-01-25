@@ -33,9 +33,9 @@ define(
                 }, this);
 
                 this.input = context.createDynamicsCompressor();
-                this.output = context.createGainNode();
+                this.output = context.createGain();
                 this.input.connect(this.output);
-                return this; 
+                return this;
             },
 
             paramChange: function(e) {
@@ -61,12 +61,12 @@ define(
 
                 var splitter = context.createChannelSplitter(2);
                 var merger = context.createChannelMerger(2);
-                var inputNode = context.createGainNode();
+                var inputNode = context.createGain();
                 var delayLNode = context.createDelayNode();
                 var delayRNode = context.createDelayNode();
                 var osc = context.createOscillator();
-                var scldepth = context.createGainNode();
-                var scrdepth = context.createGainNode();
+                var scldepth = context.createGain();
+                var scrdepth = context.createGain();
 
                 inputNode.connect( splitter );
 
@@ -78,8 +78,8 @@ define(
                 splitter.connect( delayRNode, 1 );
 
                 // depth of change to the delay:
-                scldepth.gain.value = 0.0005 
-                scrdepth.gain.value = -0.0005; 
+                scldepth.gain.value = 0.0005
+                scrdepth.gain.value = -0.0005;
 
                 osc.type = osc.SINE;
                 osc.frequency.value = 0.5;
@@ -114,14 +114,14 @@ define(
                 if(changes['depth'] !== undefined) {
                     this.scldepth.gain.value = parseFloat(changes['depth']);
                     this.scrdepth.gain.value = -parseFloat(changes['depth']);
-                } 
+                }
                 if(changes['delay'] !== undefined) {
                     this.delayLNode.delayTime.value = parseFloat(changes['delay']);
                     this.delayRNode.delayTime.value = parseFloat(changes['delay']);
-                } 
+                }
                 if(changes['speed'] !== undefined) {
                     this.osc.frequency.value = parseFloat(changes['speed']);
-                } 
+                }
             }
         }),
 
@@ -138,11 +138,11 @@ define(
                 window.AudioContext = window.AudioContext || window.webkitAudioContext;
                 this.context = new AudioContext();
                 // TODO: turn this into a gain pedal?
-                this.masterGain = this.context.createGainNode();
+                this.masterGain = this.context.createGain();
                 this.masterGain.connect(this.context.destination);
                 this.source = this.context.createBufferSource();
 
-                // Load a few samples in the highly unlikely case the user 
+                // Load a few samples in the highly unlikely case the user
                 // doesn't have an American Strat kicking around
                 new BufferLoader(
                     this.context,
@@ -179,7 +179,7 @@ define(
                     return;
                 } else {
                     pedalNode = new Pedals[name+'Node']().init(
-                        this.context, 
+                        this.context,
                         model);
                     this.pedals.splice(index, 0, pedalNode);
                     this.reconnectPedals();
@@ -252,7 +252,7 @@ define(
             // Get index of pedal given pedal's model
             getPedalIndex: function(model) {
                 for(var p=0; p<this.pedals.length; p++) {
-                    if(this.pedals[p].model === model) 
+                    if(this.pedals[p].model === model)
                         return p;
                 }
                 return -1;
@@ -262,7 +262,7 @@ define(
             getNext: function(index) {
                 var pedals = this.getSources();
                 while(pedals[index+1].model &&
-                      pedals[index+1].model.get('bypass')) 
+                      pedals[index+1].model.get('bypass'))
                     index++;
 
                 return pedals[index+1];
@@ -272,7 +272,7 @@ define(
             getPrev: function(index) {
                 var pedals = this.getSources();
                 while(pedals[index-1].model &&
-                      pedals[index-1].model.get('bypass')) 
+                      pedals[index-1].model.get('bypass'))
                     index--;
 
                 return pedals[index-1];
